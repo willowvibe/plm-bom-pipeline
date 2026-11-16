@@ -28,6 +28,35 @@ python -m generator --out data/raw --defects cyclic_bom,orphan_parts
 
 The Makefile uses `python3` by default (`make PYTHON=python data` is supported). Output directories are ignored by git.
 
+## dbt models
+
+The dbt project in `dbt/` reads the generated CSVs in place with DuckDB and builds a staging and intermediate layer into `data/plm.duckdb` (gitignored). Sources use dbt-duckdb's `external_location`, so there is no separate load step.
+
+```bash
+python3 -m venv .venv-dbt
+. .venv-dbt/bin/activate
+pip install -r requirements-dbt.txt
+
+make dbt        # generate data, then build staging + intermediate + tests
+make dbt-docs   # generate the dbt docs site
+```
+
+`make dbt` runs `dbt build --select staging intermediate` from the repository root (it also passes absolute `PLM_RAW_DIR` and `PLM_DUCKDB_PATH` paths). To run dbt directly, the same command works from the repository root:
+
+```bash
+dbt build --select staging intermediate --project-dir dbt --profiles-dir dbt
+dbt build --select int_bom_explosion --project-dir dbt --profiles-dir dbt \
+  --vars '{as_of_date: "2025-01-01"}'
+dbt docs generate --project-dir dbt --profiles-dir dbt
+```
+
+Layers:
+
+- **staging** — one typed, renamed view per CSV (`stg_*`), enums lower-cased.
+- **intermediate** — `int_current_revisions` (released revision per part as of the `as_of_date` var, default `2026-06-01`), `int_bom_explosion` (recursive BOM explosion with a cycle guard and accumulated quantities) and `int_where_used` (direct parent and product usage).
+
+The `int_bom_explosion` unit test is a hand-checked three-level fixture with known quantities; run it with `dbt test --select int_bom_explosion --project-dir dbt --profiles-dir dbt`.
+
 ## What is generated
 
 | File | Rows (clean, seed 42) | Contents |
@@ -48,4 +77,4 @@ See [`docs/data-model.md`](docs/data-model.md) for keys, relationships, effectiv
 
 ## Roadmap
 
-Milestone 1 is the deterministic generator and its test suite. Later milestones add dbt models, data tests and a report over the synthetic dataset.
+Milestone 1 is the deterministic generator and its test suite. Milestone 2 adds the dbt staging and intermediate layers. Later milestones add defect-specific data quality tests, marts and a report over the synthetic dataset.

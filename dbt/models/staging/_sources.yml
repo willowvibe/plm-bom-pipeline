@@ -1,0 +1,36 @@
+version: 2
+
+sources:
+  - name: plm
+    description: >-
+      Clean CSV extracts written by `make data`. DuckDB reads them in place
+      with read_csv_auto via dbt-duckdb's external_location; no load step and
+      no tables are created for the sources.
+    schema: raw
+    meta:
+      # `{name}` is the source table name, which is also the CSV file stem.
+      # The default is relative to the repository root, where the documented
+      # `dbt build --project-dir dbt --profiles-dir dbt` command is run.
+      # PLM_RAW_DIR can override it with an absolute path.
+      external_location: "{{ env_var('PLM_RAW_DIR', 'data/raw') }}/{name}.csv"
+    tables:
+      - name: families
+        description: Product families (Road, Mountain, City).
+      - name: products
+        description: Finished bicycles and their top-level assembly part.
+      - name: parts
+        description: Part master data (assemblies, components, raw materials).
+      - name: part_revisions
+        description: Revision history with effectivity windows.
+      - name: boms
+        description: Revision-scoped parent/child BOM lines with effectivity.
+      - name: changes
+        description: ECR, ECO and ECN change records.
+      - name: change_approvals
+        description: Approval decisions attached to changes.
+      - name: suppliers
+        description: Supplier master data.
+      - name: part_suppliers
+        description: Sourcing price and lead time per part/supplier pair.
+      - name: erp_bom
+        description: Part-number-keyed ERP manufacturing BOM extract.

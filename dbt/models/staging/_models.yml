@@ -1,0 +1,258 @@
+version: 2
+
+models:
+  - name: stg_families
+    description: "One row per product family."
+    columns:
+      - name: family_id
+        description: "Primary key."
+        data_tests: [unique, not_null]
+      - name: family_name
+        data_tests: [not_null]
+
+  - name: stg_products
+    description: "Finished bicycles and their top-level assembly part."
+    columns:
+      - name: product_id
+        description: "Primary key."
+        data_tests: [unique, not_null]
+      - name: family_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_families')
+                field: family_id
+      - name: name
+        data_tests: [not_null]
+      - name: model_year
+        data_tests: [not_null]
+      - name: top_level_part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+
+  - name: stg_parts
+    description: "Part master data, one row per part."
+    columns:
+      - name: part_id
+        description: "Primary key."
+        data_tests: [unique, not_null]
+      - name: part_number
+        description: "Unique business key."
+        data_tests: [unique, not_null]
+      - name: name
+        data_tests: [not_null]
+      - name: part_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["assembly", "component", "raw_material"]
+      - name: family_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_families')
+                field: family_id
+      - name: uom
+        data_tests: [not_null]
+      - name: lifecycle_state
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["draft", "released", "obsolete"]
+      - name: standard_cost
+        data_tests: [not_null]
+      - name: created_at
+        data_tests: [not_null]
+
+  - name: stg_part_revisions
+    description: "Revision history with effective date windows."
+    columns:
+      - name: revision_id
+        description: "Primary key."
+        data_tests: [unique, not_null]
+      - name: part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: revision_code
+        data_tests: [not_null]
+      - name: status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["in_work", "released", "obsolete"]
+      - name: effective_from
+        data_tests: [not_null]
+
+  - name: stg_boms
+    description: "Revision-scoped BOM lines with effectivity."
+    columns:
+      - name: bom_line_id
+        description: "Primary key."
+        data_tests: [unique, not_null]
+      - name: parent_part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: parent_revision_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_part_revisions')
+                field: revision_id
+      - name: child_part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: child_revision_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_part_revisions')
+                field: revision_id
+      - name: quantity
+        data_tests: [not_null]
+      - name: uom
+        data_tests: [not_null]
+      - name: find_number
+        data_tests: [not_null]
+      - name: effectivity_start
+        data_tests: [not_null]
+
+  - name: stg_changes
+    description: "ECR, ECO and ECN change records."
+    columns:
+      - name: change_id
+        description: "Primary key."
+        data_tests: [unique, not_null]
+      - name: change_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["ecr", "eco", "ecn"]
+      - name: parent_change_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_changes')
+                field: change_id
+      - name: status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["open", "approved", "closed", "rejected"]
+      - name: initiated_at
+        data_tests: [not_null]
+      - name: affected_part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+
+  - name: stg_change_approvals
+    description: "Approval decisions attached to changes."
+    columns:
+      - name: approval_id
+        description: "Primary key."
+        data_tests: [unique, not_null]
+      - name: change_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_changes')
+                field: change_id
+      - name: approver_role
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["engineering", "quality", "manufacturing", "procurement"]
+      - name: decision
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["approved", "rejected", "pending"]
+
+  - name: stg_suppliers
+    description: "Supplier master data."
+    columns:
+      - name: supplier_id
+        description: "Primary key."
+        data_tests: [unique, not_null]
+      - name: name
+        data_tests: [not_null]
+      - name: country
+        data_tests: [not_null]
+
+  - name: stg_part_suppliers
+    description: "Sourcing price and lead time per part/supplier pair."
+    columns:
+      - name: part_supplier_key
+        description: "Surrogate key over (part_id, supplier_id)."
+        data_tests: [unique, not_null]
+      - name: part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: supplier_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_suppliers')
+                field: supplier_id
+      - name: unit_price
+        data_tests: [not_null]
+      - name: lead_time_days
+        data_tests: [not_null]
+
+  - name: stg_erp_bom
+    description: "ERP manufacturing BOM extract keyed by part number."
+    columns:
+      - name: parent_part_number
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_number
+      - name: child_part_number
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_number
+      - name: quantity
+        data_tests: [not_null]
+      - name: uom
+        data_tests: [not_null]

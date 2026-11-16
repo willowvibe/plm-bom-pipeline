@@ -1,0 +1,10 @@
+plm_bom:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Relative paths resolve from the process working directory, so the
+      # documented invocation is from the repository root. The Makefile passes
+      # an absolute path to be independent of where make is invoked.
+      path: "{{ env_var('PLM_DUCKDB_PATH', 'data/plm.duckdb') }}"
+      threads: 4

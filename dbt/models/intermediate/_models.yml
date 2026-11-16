@@ -1,0 +1,134 @@
+version: 2
+
+models:
+  - name: int_current_revisions
+    description: >-
+      The released revision of each part effective on as_of_date. Overlapping
+      released revisions are resolved deterministically by latest
+      effective_from, then revision_code.
+    columns:
+      - name: part_id
+        description: "One current revision per part."
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: revision_id
+        description: "Current released revision."
+        data_tests: [unique, not_null]
+      - name: revision_code
+        data_tests: [not_null]
+      - name: status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["released"]
+      - name: effective_from
+        data_tests: [not_null]
+
+  - name: int_bom_explosion
+    description: >-
+      Recursive BOM explosion as of as_of_date. One row per product traversal
+      path, with direct and accumulated quantities. Cycles are stopped by the
+      path guard.
+    columns:
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: root_part_id
+        data_tests: [not_null]
+      - name: level
+        data_tests: [not_null]
+      - name: path
+        description: "Unique traversal path; also the row key."
+        data_tests: [unique, not_null]
+      - name: child_part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: quantity
+        data_tests: [not_null]
+      - name: accumulated_quantity
+        data_tests: [not_null]
+
+  - name: int_where_used
+    description: >-
+      Direct where-used relationships: each row links a child part to its
+      immediate parent part and to every product that uses it.
+    columns:
+      - name: where_used_key
+        description: "Surrogate key over (child_part_id, parent_part_id, product_id)."
+        data_tests: [unique, not_null]
+      - name: child_part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: parent_part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+
+unit_tests:
+  - name: test_int_bom_explosion_three_level_fixture
+    description: >-
+      Hand-checked three-level chain plus a second branch. Expected
+      accumulated quantities: L1 = 1 * 2 = 2, B1 = 1 * 5 = 5,
+      L2 = 2 * 3 = 6, L3 = 6 * 4 = 24. The date-expired line (starts 2030),
+      the line pointing at a non-current parent revision, and the cycle back
+      to L1 must all be excluded.
+    model: int_bom_explosion
+    given:
+      - input: ref('stg_products')
+        rows:
+          - {product_id: PRD-900, top_level_part_id: PART-TOP}
+      - input: ref('int_current_revisions')
+        rows:
+          - {part_id: PART-TOP, revision_id: REV-TOP}
+          - {part_id: PART-L1, revision_id: REV-L1}
+          - {part_id: PART-L2, revision_id: REV-L2}
+          - {part_id: PART-L3, revision_id: REV-L3}
+      - input: ref('stg_boms')
+        rows:
+          # Active chain: TOP -> L1 -> L2 -> L3.
+          - {bom_line_id: BOM-FX-001, parent_part_id: PART-TOP, parent_revision_id: REV-TOP, child_part_id: PART-L1, quantity: 2.00, effectivity_start: 2024-01-01, effectivity_end: null}
+          - {bom_line_id: BOM-FX-002, parent_part_id: PART-L1, parent_revision_id: REV-L1, child_part_id: PART-L2, quantity: 3.00, effectivity_start: 2024-01-01, effectivity_end: null}
+          - {bom_line_id: BOM-FX-003, parent_part_id: PART-L2, parent_revision_id: REV-L2, child_part_id: PART-L3, quantity: 4.00, effectivity_start: 2024-01-01, effectivity_end: null}
+          # Second active branch at level 1.
+          - {bom_line_id: BOM-FX-004, parent_part_id: PART-TOP, parent_revision_id: REV-TOP, child_part_id: PART-B1, quantity: 5.00, effectivity_start: 2024-01-01, effectivity_end: null}
+          # Not effective on 2026-06-01.
+          - {bom_line_id: BOM-FX-005, parent_part_id: PART-L2, parent_revision_id: REV-L2, child_part_id: PART-X, quantity: 9.00, effectivity_start: 2030-01-01, effectivity_end: null}
+          # Parent revision is not the current released revision.
+          - {bom_line_id: BOM-FX-006, parent_part_id: PART-L1, parent_revision_id: REV-L1-OLD, child_part_id: PART-Y, quantity: 7.00, effectivity_start: 2024-01-01, effectivity_end: null}
+          # Cycle back to an ancestor; must be stopped by the path guard.
+          - {bom_line_id: BOM-FX-007, parent_part_id: PART-L3, parent_revision_id: REV-L3, child_part_id: PART-L1, quantity: 8.00, effectivity_start: 2024-01-01, effectivity_end: null}
+    expect:
+      rows:
+        - {product_id: PRD-900, root_part_id: PART-TOP, level: 0, path: 'PART-TOP', parent_part_id: null, child_part_id: PART-TOP, quantity: 1.00, accumulated_quantity: 1.00}
+        - {product_id: PRD-900, root_part_id: PART-TOP, level: 1, path: 'PART-TOP > PART-L1', parent_part_id: PART-TOP, child_part_id: PART-L1, quantity: 2.00, accumulated_quantity: 2.00}
+        - {product_id: PRD-900, root_part_id: PART-TOP, level: 1, path: 'PART-TOP > PART-B1', parent_part_id: PART-TOP, child_part_id: PART-B1, quantity: 5.00, accumulated_quantity: 5.00}
+        - {product_id: PRD-900, root_part_id: PART-TOP, level: 2, path: 'PART-TOP > PART-L1 > PART-L2', parent_part_id: PART-L1, child_part_id: PART-L2, quantity: 3.00, accumulated_quantity: 6.00}
+        - {product_id: PRD-900, root_part_id: PART-TOP, level: 3, path: 'PART-TOP > PART-L1 > PART-L2 > PART-L3', parent_part_id: PART-L2, child_part_id: PART-L3, quantity: 4.00, accumulated_quantity: 24.00}
