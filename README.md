@@ -1,6 +1,7 @@
 # plm-bom-pipeline
 
 [![CI](https://github.com/willowvibe/plm-bom-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/willowvibe/plm-bom-pipeline/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-%23c2410c.svg)](LICENSE)
 
 [![Demo: the pipeline running, the report, and the defect harness](docs/assets/demo.gif)](https://willowvibe.github.io/plm-bom-pipeline/#demo)
 
@@ -148,4 +149,8 @@ The data model and tests are deliberately vendor-neutral, so the integration wor
 
 Milestone 1 is the deterministic generator and its test suite. Milestone 2 adds the dbt staging and intermediate layers. Milestone 3 adds the mart layer, the seven defect-specific data-quality tests and the exact-one-failure attribution harness. Milestone 4 adds family-shared raw materials and the static HTML report at `site/report/index.html`. Milestone 5 adds the development requirements and CI: a clean-checkout `make demo` is timed against a 120-second budget, and the defect harness runs on every dataset.
 
-Milestone 6 was the README and docs audit. Milestone 7 publishes the landing page, the static report, the generated dbt docs and a narrated 1080p walkthrough to GitHub Pages; the GIF above is a short cut of that video. Milestone 8 adds the `v1.0.0` release.
+Milestone 6 was the README and docs audit. Milestone 7 publishes the landing page, the static report, the generated dbt docs and a narrated 1080p walkthrough to GitHub Pages; the GIF above is a short cut of that video. Milestone 8 tags `v1.0.0` and wires the project into the portfolio hub and the WillowVibe company site.
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details. All data in this repository is synthetic and generated from seed 42; no client or production data is included.
