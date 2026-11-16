@@ -270,8 +270,12 @@ def build_dataset(seed: int) -> Dataset:
     families = [Family(family_id=fid, family_name=name) for fid, name in FAMILIES]
     products: list[Product] = []
     parts: list[Part] = []
-    topology: list[tuple[Part, Part, int]] = []
+    topology: list[tuple[Part, Part, int, str | None]] = []
     top_part_ids: list[str] = []
+    family_shared_materials: dict[str, list[Part]] = {
+        family.family_id: [] for family in families
+    }
+    shared_raw_ids: list[str] = []
 
     part_seq = 0
 
@@ -406,18 +410,38 @@ def build_dataset(seed: int) -> Dataset:
             )
 
         for j, child in enumerate(level1):
-            topology.append((top, child, 10 * (j + 1)))
+            topology.append((top, child, 10 * (j + 1), None))
         for j, parent in enumerate(level1):
             for k, child in enumerate(level2[j * 3 : (j + 1) * 3]):
-                topology.append((parent, child, 10 * (k + 1)))
+                topology.append((parent, child, 10 * (k + 1), None))
         for j, parent in enumerate(level2):
             for k, child in enumerate(level3[j * 2 : (j + 1) * 2]):
-                topology.append((parent, child, 10 * (k + 1)))
+                topology.append((parent, child, 10 * (k + 1), None))
         for j, parent in enumerate(level3):
             for k, child in enumerate(level4[j * 2 : (j + 1) * 2]):
-                topology.append((parent, child, 10 * (k + 1)))
+                topology.append((parent, child, 10 * (k + 1), None))
         for j, parent in enumerate(level4):
-            topology.append((parent, level5[j], 10))
+            topology.append((parent, level5[j], 10, None))
+
+        # The first product in each family contributes its first three
+        # level-5 raw materials as family-wide shared materials. Every other
+        # product links three distinct level-4 components to them, making
+        # those raw materials reachable from all six products in the family.
+        if product_index % 6 == 0:
+            family_shared_materials[family_id] = level5[:3]
+            shared_raw_ids.extend(material.part_id for material in level5[:3])
+        else:
+            for material_index, shared_material in enumerate(
+                family_shared_materials[family_id]
+            ):
+                topology.append(
+                    (
+                        level4[material_index],
+                        shared_material,
+                        30 + 10 * material_index,
+                        "20" if material_index == 1 else "10",
+                    )
+                )
 
         products.append(
             Product(
@@ -448,7 +472,7 @@ def build_dataset(seed: int) -> Dataset:
             0.50,
             32.0,
         )
-        topology.append((component, raw, 20))
+        topology.append((component, raw, 20, None))
 
     if len(parts) != TOTAL_PARTS:
         raise RuntimeError(f"expected {TOTAL_PARTS} parts, got {len(parts)}")
@@ -522,7 +546,17 @@ def build_dataset(seed: int) -> Dataset:
     # BOM lines use the released base revision on both ends.
     # ------------------------------------------------------------------
     boms: list[BomLine] = []
-    for line_index, (parent, child, find_number) in enumerate(topology, start=1):
+    for line_index, (
+        parent,
+        child,
+        find_number,
+        quantity_override,
+    ) in enumerate(topology, start=1):
+        quantity = (
+            quantity_override
+            if quantity_override is not None
+            else rng.choice(QUANTITIES)
+        )
         boms.append(
             BomLine(
                 bom_line_id=f"BOM-{line_index:06d}",
@@ -530,7 +564,7 @@ def build_dataset(seed: int) -> Dataset:
                 parent_revision_id=base_revision[parent.part_id],
                 child_part_id=child.part_id,
                 child_revision_id=base_revision[child.part_id],
-                quantity=rng.choice(QUANTITIES),
+                quantity=quantity,
                 uom=child.uom,
                 find_number=f"{find_number}",
                 effectivity_start=base_effective_from[parent.part_id],
@@ -545,11 +579,24 @@ def build_dataset(seed: int) -> Dataset:
     ecrs: list[Change] = []
     affected_part_ids = [part.part_id for part in parts]
 
+    if len(shared_raw_ids) != 9:
+        raise RuntimeError(
+            f"expected 9 family-shared raw materials, got {len(shared_raw_ids)}"
+        )
+
     for i in range(40):
         initiated = CHANGE_BASE_DATE + timedelta(days=i * 6)
         status = ["closed", "approved", "open", "rejected"][i % 4]
         approved = initiated + timedelta(days=2) if status in ("closed", "approved") else None
         closed = initiated + timedelta(days=9) if status == "closed" else None
+        # Every third ECR targets a family-shared raw material, so its ECO and
+        # ECN children inherit an affected part reachable from several
+        # products. The remaining ECRs draw from the full part list.
+        affected_part_id = (
+            rng.choice(shared_raw_ids)
+            if i % 3 == 0
+            else rng.choice(affected_part_ids)
+        )
         ecr = Change(
             change_id=f"ECR-{i + 1:04d}",
             change_type="ECR",
@@ -559,7 +606,7 @@ def build_dataset(seed: int) -> Dataset:
             initiated_at=_iso(initiated),
             approved_at=_iso(approved) if approved else "",
             closed_at=_iso(closed) if closed else "",
-            affected_part_id=rng.choice(affected_part_ids),
+            affected_part_id=affected_part_id,
         )
         ecrs.append(ecr)
         changes.append(ecr)

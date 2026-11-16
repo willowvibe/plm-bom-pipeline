@@ -84,6 +84,25 @@ def max_bom_depth(products: list[dict[str, str]], boms: list[dict[str, str]]) ->
     return best
 
 
+def reachable_products_by_part(
+    products: list[dict[str, str]],
+    boms: list[dict[str, str]],
+) -> dict[str, set[str]]:
+    adjacency = build_adjacency(boms)
+    reachable: dict[str, set[str]] = defaultdict(set)
+    for product in products:
+        stack = [product["top_level_part_id"]]
+        seen: set[str] = set()
+        while stack:
+            part_id = stack.pop()
+            if part_id in seen:
+                continue
+            seen.add(part_id)
+            reachable[part_id].add(product["product_id"])
+            stack.extend(adjacency.get(part_id, []))
+    return reachable
+
+
 def orphan_part_ids(
     parts: list[dict[str, str]],
     boms: list[dict[str, str]],
@@ -271,6 +290,22 @@ def test_clean_data_invariants(tmp_path: Path) -> None:
 
     part_ids = {part["part_id"] for part in parts}
     assert {product["top_level_part_id"] for product in products} <= part_ids
+
+
+def test_parts_and_changes_cross_product_boundaries(tmp_path: Path) -> None:
+    out_dir = generate_into(tmp_path, tag="sharing")
+    products = read_rows(out_dir, "products.csv")
+    boms = read_rows(out_dir, "boms.csv")
+    changes = read_rows(out_dir, "changes.csv")
+
+    reachable = reachable_products_by_part(products, boms)
+    assert any(
+        len(product_ids) >= 2 for product_ids in reachable.values()
+    ), "no part is reachable from multiple products"
+    assert any(
+        len(reachable.get(change["affected_part_id"], set())) >= 2
+        for change in changes
+    ), "no change affects a part reachable from multiple products"
 
 
 # ----------------------------------------------------------------------

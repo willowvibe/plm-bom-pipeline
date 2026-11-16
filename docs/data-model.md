@@ -7,7 +7,7 @@ The generator models a fictional bicycle manufacturer. It is deliberately generi
 - **Families** — Road, Mountain and City.
 - **Products** — 18 finished bicycles, six per family. Each product points at one top-level assembly part.
 - **Parts** — exactly 2,000: 558 assemblies, 648 components and 794 raw materials. Raw materials carry a base unit of measure such as `M`, `KG`, `L` or `EA`; assemblies and components are `EA`.
-- **BOM hierarchy** — a product top assembly fans out through three subsystem assemblies, nine subassemblies, eighteen modules, thirty-six components and thirty-six raw-material leaves. A further 146 raw materials are spread across the components, so the products differ slightly in part count. The longest path is five BOM edges (six part levels) from product top to raw material.
+- **BOM hierarchy** — a product top assembly fans out through three subsystem assemblies, nine subassemblies, eighteen modules, thirty-six components and thirty-six raw-material leaves. A further 146 raw materials are spread across the components, so the products differ slightly in part count. Within each family, the first product's first three raw materials are shared by all six products: each of the other five products links three of its own components to them, adding 45 cross-product BOM lines. The longest path is five BOM edges (six part levels) from product top to raw material.
 - **Revisions** — every part has a released base revision. Some parts also have an older obsolete revision or a future in-work revision.
 - **Change control** — requirements (`ECR`), implementation orders (`ECO`) and notices (`ECN`) form a parent chain, with approval rows for each change.
 - **Sourcing** — 40 suppliers, each part sourced from one to three of them.
@@ -83,7 +83,7 @@ Clean data has exactly one released revision per part. Additional obsolete revis
 | `effectivity_start` | ISO date; inherited from the parent revision |
 | `effectivity_end` | ISO date; empty string means open-ended |
 
-In clean data each non-top part has exactly one BOM parent, so the BOM is a forest rooted at the product top assemblies. The cyclic defect adds a second edge and breaks that property.
+In clean data most non-top parts have exactly one BOM parent, but the nine family-shared raw materials each have six parents (one from the first product in the family and one from each of its five siblings). The BOM is still acyclic and rooted at the product top assemblies. The cyclic defect adds a backward edge and breaks acyclicity.
 
 ### `changes.csv`
 
@@ -185,6 +185,7 @@ The test suite asserts all of the following on `--defects none` output:
 8. Every BOM quantity is greater than zero.
 9. Every BOM line `uom` equals the child part base `uom`.
 10. Every closed `ECO` has at least one `ECN` child referencing it.
+11. At least one part is reachable from two or more products, and at least one change's affected part is reachable from two or more products.
 
 ## Defect switches
 
@@ -229,8 +230,8 @@ The mart layer is materialized as tables in the `main_marts` schema (`+schema: m
 | `bom_cost_weight_rollup` | one row per product | `total_cost`, `total_weight_kg`, `bom_line_count` and `max_depth`. Cost and weight sum leaf parts only to avoid double counting; missing values coalesce to 0. |
 | `where_used` | one row per `(child part, immediate parent, product)` | `int_where_used` enriched with child/parent part names and types plus the product name and family. The direct parent relationship is preserved. |
 | `eco_cycle_time` | one row per change | `initiated_at`, `approved_at`, `closed_at`, null-safe `days_to_approval` and `days_to_close`, and a `cycle_status` of `open`, `approved`, `rejected` or `closed`. |
-| `change_impact` | one row per `(change, product)` | Products that reach the change's affected part through the BOM, plus products whose top-level part is the affected part. Carries change type/status/title. |
-| `part_reuse` | one row per part | `direct_parent_count`, `product_count` and `total_direct_quantity` (coalesced 0) as of `as_of_date`. `product_count` includes each product's own top-level part. Parts used nowhere still appear with zeros. |
+| `change_impact` | one row per `(change, product)` | Products that reach the change's affected part through the BOM, plus products whose top-level part is the affected part. Carries change type/status/title. Every third ECR targets a family-shared raw material, so those changes and their ECO/ECN children affect all six products in the family. |
+| `part_reuse` | one row per part | `direct_parent_count`, `product_count` and `total_direct_quantity` (coalesced 0) as of `as_of_date`. `product_count` includes each product's own top-level part. The nine family-shared raw materials have `product_count` 6; every other used part has 1, and unused parts have 0. |
 | `bom_erp_reconciliation` | one row per parent/child part-number key | Full outer join of the active PLM BOM against `stg_erp_bom`, with `plm_quantity`, `erp_quantity`, `plm_uom`, `erp_uom`, `quantity_delta` and a `reconciliation_status` of `match`, `quantity_mismatch`, `uom_mismatch`, `plm_only` or `erp_only`. |
 
 The mart schema tests cover keys, relationships and enum values only. They deliberately do not assert PLM/ERP equality, positive quantities or universal part usage, because those properties are exactly what the seeded defects violate.
@@ -242,6 +243,6 @@ The mart schema tests cover keys, relationships and enum values only. They delib
 ## Assumptions and limitations
 
 - The dataset is entirely synthetic; no client, production or real supplier data is used.
-- Clean BOMs have single-parent parts, which keeps the forest easy to traverse. Real PLM commonly reuses components under many assemblies.
+- Most clean BOM parts have a single parent, which keeps traversal simple. A deliberate exception is the nine family-shared raw materials, which each have six parents so where-used and change impact cross product boundaries.
 - `erp_bom.csv` is a faithful part-number projection of the PLM BOM, not an independently corrupted ERP system. Reconciliation defects across the two systems are a later-milestone concern.
 - `lifecycle_state = obsolete` is part of the schema, but the clean generator currently expresses obsolescence through superseded revision statuses; only `released` and `draft` part lifecycles occur in generated rows.
