@@ -1,0 +1,12 @@
+[project]
+name = "plm-bom-pipeline"
+version = "0.1.0"
+description = "Deterministic synthetic PLM data generator for bicycle parts, BOMs and change control"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
