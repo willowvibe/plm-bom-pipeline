@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dbt.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Generator and report tests
+        run: make test PYTHON=python
+
+      - name: Quickstart from a clean checkout
+        run: |
+          start=$(date +%s)
+          make demo PYTHON=python DBT=dbt
+          elapsed=$(( $(date +%s) - start ))
+          echo "make demo took ${elapsed}s (budget: 120s)"
+          test "$elapsed" -lt 120
+
+      - name: Defect attribution on every dataset
+        run: make verify-defects PYTHON=python DBT=dbt

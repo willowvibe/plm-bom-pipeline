@@ -1,5 +1,7 @@
 # plm-bom-pipeline
 
+[![CI](https://github.com/willowvibe/plm-bom-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/willowvibe/plm-bom-pipeline/actions/workflows/ci.yml)
+
 Synthetic PLM data — parts, multi-level BOMs and ECR/ECO/ECN change control — generated deterministically for testing analytics.
 
 This repository contains a small, standard-library-only Python generator for a fictional bicycle manufacturer's product lifecycle data. It writes 3 product families, 18 products, exactly 2,000 parts, revision histories with effectivity dates, five-level bills of material, ECR → ECO → ECN change records with approvals, suppliers and a synthetic ERP BOM extract. Every file is derived from one integer seed, all tables are sorted by primary key, and dates come from fixed arithmetic rather than the clock — so the same seed produces byte-identical files. Seven independently switchable defects model common PLM data-quality problems.
@@ -10,15 +12,20 @@ All companies, products, suppliers, costs, dates and change records are fabricat
 
 ## Quickstart
 
-Requires Python 3.11+. Runtime code uses only the Python standard library; `pytest` is the only development dependency.
+Requires Python 3.11+ and `make`. The generator uses only the standard library; the dbt build and report need the development requirements.
 
 ```bash
-make data    # clean dataset  -> data/raw
-make messy   # all defects    -> data/raw-messy
-make test    # run the test suite
+python3 -m venv .venv-dbt
+. .venv-dbt/bin/activate
+pip install -r requirements-dev.txt
+
+make demo             # generate clean data, dbt build + tests, write the report
+make verify-defects   # prove each seeded defect fails exactly its own test
 ```
 
-Equivalent CLI invocations:
+`make demo` takes about 15 seconds on a laptop and writes `data/raw`, `data/plm.duckdb` and `site/report/index.html`.
+
+Generator-only commands work with the standard library alone:
 
 ```bash
 python -m generator --out data/raw --seed 42 --defects none
@@ -26,17 +33,14 @@ python -m generator --out data/raw-messy --seed 42 --defects all
 python -m generator --out data/raw --defects cyclic_bom,orphan_parts
 ```
 
-The Makefile uses `python3` by default (`make PYTHON=python data` is supported). Output directories are ignored by git.
+`make data`, `make messy` and `make test` wrap the first two commands and pytest. The Makefile uses `python3` by default (`make PYTHON=python data` is supported). Output directories are ignored by git.
 
 ## dbt models
 
 The dbt project in `dbt/` reads the generated CSVs in place with DuckDB and builds the staging, intermediate and mart layers into `data/plm.duckdb` (gitignored). Sources use dbt-duckdb's `external_location`, so there is no separate load step.
 
 ```bash
-python3 -m venv .venv-dbt
-. .venv-dbt/bin/activate
-pip install -r requirements-dbt.txt
-
+# using the virtualenv from Quickstart (requirements-dev includes dbt-duckdb)
 make dbt             # generate data, then build every layer and test
 make dbt-docs        # generate the dbt docs site
 make report          # build dbt, then write site/report/index.html
