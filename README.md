@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/willowvibe/plm-bom-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/willowvibe/plm-bom-pipeline/actions/workflows/ci.yml)
 
+**Your PLM data — parts, BOMs and change orders — flowing into governed, tested analytics in one command.**
+
 Synthetic PLM data — parts, multi-level BOMs and ECR/ECO/ECN change control — generated deterministically for testing analytics.
 
 This repository contains a small, standard-library-only Python generator for a fictional bicycle manufacturer's product lifecycle data. It writes 3 product families, 18 products, exactly 2,000 parts, revision histories with effectivity dates, five-level bills of material, ECR → ECO → ECN change records with approvals, suppliers and a synthetic ERP BOM extract. Every file is derived from one integer seed, all tables are sorted by primary key, and dates come from fixed arithmetic rather than the clock — so the same seed produces byte-identical files. Seven independently switchable defects model common PLM data-quality problems.
@@ -9,6 +11,23 @@ This repository contains a small, standard-library-only Python generator for a f
 ## Built from scratch on synthetic data
 
 All companies, products, suppliers, costs, dates and change records are fabricated. No client or production data is used. The generator models generic PLM concepts only.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    seed["Seed 42"] --> gen["Python generator"]
+    gen --> csv["10 CSV exports (clean or seeded defects)"]
+    csv --> staging["dbt staging"]
+    staging --> inter["dbt intermediate"]
+    inter --> marts["dbt marts (7 analysis tables)"]
+    marts --> db[("DuckDB")]
+    marts --> report["Static HTML report"]
+    marts --> tests["174 data tests + 1 unit test"]
+    tests --> verify["make verify-defects"]
+```
+
+The generator is the only source of data. dbt reads the CSVs in place through `external_location`, so there is no separate load step; the marts and tests build into `data/plm.duckdb`, and the report reads that database plus `dbt/target/run_results.json`. See [`docs/architecture.md`](docs/architecture.md) for component responsibilities, contracts and design decisions.
 
 ## Quickstart
 
@@ -23,7 +42,7 @@ make demo             # generate clean data, dbt build + tests, write the report
 make verify-defects   # prove each seeded defect fails exactly its own test
 ```
 
-`make demo` takes about 15 seconds on a laptop and writes `data/raw`, `data/plm.duckdb` and `site/report/index.html`.
+`make demo` typically takes 15–20 seconds on a laptop and writes `data/raw`, `data/plm.duckdb` and `site/report/index.html`.
 
 Generator-only commands work with the standard library alone:
 
@@ -33,7 +52,7 @@ python -m generator --out data/raw-messy --seed 42 --defects all
 python -m generator --out data/raw --defects cyclic_bom,orphan_parts
 ```
 
-`make data`, `make messy` and `make test` wrap the first two commands and pytest. The Makefile uses `python3` by default (`make PYTHON=python data` is supported). Output directories are ignored by git.
+`make data`, `make messy` and `make test` wrap the first two commands and pytest. The Makefile uses `python3` by default (`make PYTHON=python data` is supported). Generated raw data and DuckDB files are ignored by git.
 
 ## dbt models
 
@@ -69,7 +88,7 @@ Layers:
 | `where_used` | child/parent/product | Direct where-used with child and parent part names and product name. Family-shared raw materials appear under all six products in their family. |
 | `eco_cycle_time` | change | Approval/close dates, null-safe day counts and `cycle_status`. |
 | `change_impact` | change/product | Distinct products affected through the BOM or as the top-level part. Changes on a family-shared raw material affect all six products in the family. |
-| `part_reuse` | part | `direct_parent_count`, `product_count`, `total_direct_quantity`; the nine family-shared raw materials reach six products, other used parts reach one, and unused parts show zeros. |
+| `part_reuse` | part | `direct_parent_count`, `product_count`, `total_direct_quantity`; the nine family-shared raw materials reach six products and the other 1,991 parts reach one. |
 | `bom_erp_reconciliation` | parent/child part number | Full outer join of PLM and ERP BOMs with quantities, UoMs, delta and `reconciliation_status`. |
 
 The `int_bom_explosion` unit test is a hand-checked three-level fixture with known quantities; run it with `dbt test --select int_bom_explosion --project-dir dbt --profiles-dir dbt`.
@@ -90,7 +109,7 @@ The page covers BOM structure, change-control cycle times, cross-product change 
 
 `dbt/tests/` holds seven singular tests, one per seeded defect: `assert_no_cyclic_bom`, `assert_no_orphan_parts`, `assert_no_released_assembly_unreleased_child`, `assert_no_overlapping_revision_effectivity`, `assert_no_zero_or_negative_quantity`, `assert_no_uom_mismatch` and `assert_no_eco_closed_without_ecn`.
 
-Each test returns zero rows on clean data and rows only when its own defect is present. `make verify-defects` proves that attribution end to end: it generates clean data, each defect alone and all seven together into temporary directories, and for each case runs a full `dbt build` plus a second build with the seven singular tests excluded. The first pass checks that clean has zero failures, each single defect fails exactly its own test, and `all` fails exactly seven. The second pass removes dbt's build gate and checks that all 188 built-in model, generic, unit and mart nodes still pass (20 model successes plus 168 test passes), with no skipped models. The command accepts a dbt path, for example `make verify-defects DBT=/tmp/plm-dbt-venv/bin/dbt`. See [`docs/defects.md`](docs/defects.md) for the defect-to-test table.
+Each test returns zero rows on clean data and rows only when its own defect is present. `make verify-defects` proves that attribution end to end: it generates clean data, each defect alone and all seven together into temporary directories, and for each case runs a full `dbt build` plus a second build with the seven singular tests excluded. The first pass checks that clean has zero failures, each single defect fails exactly its own test, and `all` fails exactly seven. The second pass removes dbt's build gate and checks that all 188 built-in nodes still pass (20 model successes, 167 generic data-test passes and the 1 unit test), with no skipped models. The command accepts a dbt path, for example `make verify-defects DBT=.venv-dbt/bin/dbt`. See [`docs/defects.md`](docs/defects.md) for the defect-to-test table.
 
 ## What is generated
 
@@ -110,6 +129,19 @@ Each test returns zero rows on clean data and rows only when its own defect is p
 
 See [`docs/data-model.md`](docs/data-model.md) for keys, relationships, effectivity semantics and each defect switch.
 
+## How we'd adapt this for your PLM
+
+The data model and tests are deliberately vendor-neutral, so the integration work is concentrated in two places: the staging contract and the rules in `docs/data-model.md`.
+
+- **Source** — replace `data/raw` with scheduled exports or API extracts from Teamcenter, Windchill, 3DEXPERIENCE or your own PLM. Keep the `stg_*` column names and types, or change the staging models in one layer.
+- **PLM semantics** — map your revision states, effectivity rules (date, unit or lot), BOM release states and change workflow to the concepts used here. The recursive explosion, current-revision resolution and where-used models then carry over unchanged.
+- **ERP reconciliation** — swap the synthetic `erp_bom.csv` for your ERP mBOM extract, keep the parent/child part-number join, and extend the status buckets if your part-number mapping needs it.
+- **Warehouse** — replace the dbt-duckdb adapter with Snowflake, BigQuery, Postgres or Databricks. The models are plain SQL and do not depend on DuckDB-specific features apart from `external_location` in the staging sources.
+- **Operations** — schedule dbt and the report from Airflow, Dagster or CI; add SSO, secrets management and alerting around the same tests.
+- **Not included** — this repository has no vendor connector and no real PLM credentials. The demo is synthetic end to end, so the first engagement step is always a scoped export from your system.
+
 ## Roadmap
 
-Milestone 1 is the deterministic generator and its test suite. Milestone 2 adds the dbt staging and intermediate layers. Milestone 3 (done) adds the mart layer, the seven defect-specific data-quality tests and the exact-one-failure attribution harness. Milestone 4 (done) adds the static HTML report at `site/report/index.html`.
+Milestone 1 is the deterministic generator and its test suite. Milestone 2 adds the dbt staging and intermediate layers. Milestone 3 adds the mart layer, the seven defect-specific data-quality tests and the exact-one-failure attribution harness. Milestone 4 adds family-shared raw materials and the static HTML report at `site/report/index.html`. Milestone 5 adds the development requirements and CI: a clean-checkout `make demo` is timed against a 120-second budget, and the defect harness runs on every dataset.
+
+Milestones 6–8 cover the README/docs audit, GitHub Pages with the report and dbt docs, the narrated demo and a `v1.0.0` release.
