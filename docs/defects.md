@@ -30,7 +30,7 @@ The generator switch `zero_negative_quantity` maps to the test
 ## Two-pass defect verification
 
 ```bash
-make verify-defects DBT=/tmp/plm-dbt-venv/bin/dbt
+make verify-defects DBT=.venv-dbt/bin/dbt
 ```
 
 `scripts/verify_defects.py` runs nine cases: clean, each of the seven defects
