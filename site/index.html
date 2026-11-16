@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLM / BOM Intelligence — plm-bom-pipeline</title>
+<meta name="description" content="A synthetic bicycle manufacturer's PLM data — parts, multi-level BOMs and change control — tested with dbt and reported as a single HTML page.">
+<link rel="canonical" href="https://willowvibe.github.io/plm-bom-pipeline/">
+<style>
+  :root {
+    --paper: #f7f5f0;
+    --ink: #17191c;
+    --muted: #5b5f66;
+    --rule: #d8d3c8;
+    --panel: #efece4;
+    --accent: #c2410c;
+    --teal: #0f766e;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1120px; margin: 0 auto; padding: 40px 32px 56px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    color: var(--accent);
+  }
+  .hero { border-top: 3px solid var(--ink); padding-top: 22px; }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(2.6rem, 6vw, 4.6rem);
+    line-height: 1.02;
+    letter-spacing: -.03em;
+    margin: 14px 0 18px;
+    max-width: 16ch;
+  }
+  .subtitle { max-width: 62ch; color: var(--muted); font-size: 1.1rem; margin: 0 0 18px; }
+  .subtitle strong { color: var(--ink); font-weight: 600; }
+  .badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; }
+  .badge {
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 5px 9px;
+    border-radius: 2px;
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 24px 0 0; }
+  .button {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .76rem;
+    letter-spacing: .04em;
+    text-decoration: none;
+    padding: 11px 15px;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    background: transparent;
+  }
+  .button.primary { background: var(--ink); color: var(--paper); }
+  .button:hover, .button:focus-visible { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    margin-top: 34px;
+  }
+  .kpi { padding: 16px 14px 14px; border-right: 1px solid var(--rule); }
+  .kpi:last-child { border-right: 0; }
+  .kpi-value {
+    font-family: var(--mono);
+    font-size: clamp(1.5rem, 3vw, 2.1rem);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .kpi-label {
+    font-family: var(--mono);
+    font-size: .64rem;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+  section { margin-top: 64px; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    border-top: 1px solid var(--ink);
+    padding-top: 14px;
+  }
+  .section-num { font-family: var(--mono); font-size: .72rem; color: var(--accent); letter-spacing: .12em; }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(1.6rem, 3vw, 2.1rem);
+    letter-spacing: -.015em;
+    margin: 0;
+  }
+  .note { color: var(--muted); font-size: .92rem; max-width: 70ch; }
+  .video-shell { margin-top: 24px; border: 1px solid var(--ink); background: #000; position: relative; }
+  video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+  .video-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    padding: 12px 14px;
+    background: var(--panel);
+    border-top: 1px solid var(--ink);
+  }
+  .video-controls button {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border: 1px solid var(--ink);
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .video-controls button:hover, .video-controls button:focus-visible { background: var(--ink); color: var(--paper); }
+  .video-caption { color: var(--muted); font-size: .84rem; margin: 10px 0 0; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+  .card { border: 1px solid var(--rule); border-top: 2px solid var(--ink); padding: 18px; }
+  .card h3 { font-family: var(--serif); font-size: 1.1rem; margin: 0 0 8px; }
+  .card p { color: var(--muted); font-size: .88rem; margin: 0; }
+  .commands {
+    font-family: var(--mono);
+    font-size: .82rem;
+    line-height: 1.9;
+    background: var(--panel);
+    border-left: 3px solid var(--accent);
+    padding: 16px 18px;
+    margin: 20px 0 0;
+    overflow-x: auto;
+  }
+  footer {
+    margin-top: 72px;
+    border-top: 1px solid var(--ink);
+    padding-top: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+  .footer-title {
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  footer p { color: var(--muted); font-size: .82rem; margin: 0 0 10px; max-width: 52ch; }
+  footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent); }
+  @media (max-width: 760px) {
+    .page { padding: 28px 16px 44px; }
+    h1 { font-size: clamp(2.2rem, 9vw, 2.8rem); }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .kpi { border-bottom: 1px solid var(--rule); }
+    .kpi:nth-child(2n) { border-right: 0; }
+    .kpi:last-child { border-bottom: 0; }
+    .grid, footer { grid-template-columns: 1fr; }
+  }
+  @media print {
+    html, body { background: #fff; }
+    .page { max-width: none; padding: 0; }
+    .video-shell, .video-controls, .actions { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+<header class="hero">
+  <div class="eyebrow">PLM / BOM INTELLIGENCE</div>
+  <h1>Your PLM data, tested end to end.</h1>
+  <p class="subtitle">A synthetic bicycle manufacturer — <strong>18 products, 2,000 parts, five-level BOMs, 75 changes</strong> — modelled, tested and reported in one command. All data is fabricated.</p>
+  <div class="badges">
+    <span class="badge">Synthetic data · seed 42</span>
+    <span class="badge">dbt-duckdb</span>
+    <span class="badge">195 / 195 checks</span>
+  </div>
+  <div class="actions">
+    <a class="button primary" href="report/">Read the report →</a>
+    <a class="button" href="dbt-docs/">Browse the dbt docs →</a>
+    <a class="button" href="https://github.com/willowvibe/plm-bom-pipeline">Source on GitHub →</a>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-value">18</div><div class="kpi-label">Products</div></div>
+    <div class="kpi"><div class="kpi-value">2,000</div><div class="kpi-label">Parts</div></div>
+    <div class="kpi"><div class="kpi-value">2,027</div><div class="kpi-label">BOM lines</div></div>
+    <div class="kpi"><div class="kpi-value">195</div><div class="kpi-label">Tests passing</div></div>
+  </div>
+</header>
+
+<main>
+<section id="demo">
+  <div class="section-head"><span class="section-num">01</span><h2>See the pipeline run</h2></div>
+  <p class="note">A two-minute walkthrough of the quickstart, the report and the defect harness. The video is recorded from this project running locally; there are no mockups.</p>
+  <div class="video-shell">
+    <video id="demo-video" controls muted autoplay playsinline preload="auto"
+           poster="plm-bom-pipeline-demo-poster.jpg"
+           aria-label="Recorded walkthrough of plm-bom-pipeline">
+      <source src="plm-bom-pipeline-demo.mp4" type="video/mp4">
+      Your browser does not support the video tag. <a href="plm-bom-pipeline-demo.mp4">Download the video</a>.
+    </video>
+    <div class="video-controls">
+      <button id="play-demo" type="button" hidden>Play demo</button>
+      <button id="unmute-demo" type="button">Unmute</button>
+      <span class="video-caption">Voiceover only · no captions burned in</span>
+    </div>
+  </div>
+</section>
+
+<section id="what">
+  <div class="section-head"><span class="section-num">02</span><h2>What it proves</h2></div>
+  <div class="grid">
+    <article class="card">
+      <h3>Multi-level BOMs</h3>
+      <p>A recursive explosion with effectivity filtering, accumulated quantities and a cycle guard, rolled up to product cost and weight.</p>
+    </article>
+    <article class="card">
+      <h3>Change impact</h3>
+      <p>Every ECR, ECO and ECN is mapped to the products that reach its affected part. Shared raw materials make impact cross product boundaries.</p>
+    </article>
+    <article class="card">
+      <h3>Quality that bites</h3>
+      <p>Seven seeded PLM defects, one singular test each. The harness proves exactly one failure per defect and 188 built-in checks green on every dataset.</p>
+    </article>
+  </div>
+</section>
+
+<section id="reproduce">
+  <div class="section-head"><span class="section-num">03</span><h2>Reproduce it</h2></div>
+  <p class="note">Requires Python 3.11+ and make. One install, then the quickstart generates the data, builds the marts, runs the tests and writes the report.</p>
+  <pre class="commands">python3 -m venv .venv-dbt
+. .venv-dbt/bin/activate
+pip install -r requirements-dev.txt
+
+make demo
+make verify-defects</pre>
+  <p class="note">The full source, data model and defect details are in the <a href="https://github.com/willowvibe/plm-bom-pipeline">repository</a>.</p>
+</section>
+</main>
+
+<footer>
+  <div>
+    <div class="footer-title">About this site</div>
+    <p>Synthetic bicycle PLM data, seed 42, as of 2026-06-01. No real company, product, supplier or person is represented.</p>
+  </div>
+  <div>
+    <div class="footer-title">Pages</div>
+    <p><a href="report/">Static report</a> · <a href="dbt-docs/">dbt docs</a> · <a href="https://github.com/willowvibe/plm-bom-pipeline">Source</a></p>
+  </div>
+</footer>
+</div>
+<script>
+  (() => {
+    const video = document.getElementById("demo-video");
+    const playButton = document.getElementById("play-demo");
+    const unmuteButton = document.getElementById("unmute-demo");
+    if (!video || !playButton || !unmuteButton) return;
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const sync = () => {
+      playButton.hidden = !video.paused;
+      unmuteButton.hidden = video.paused || !video.muted;
+    };
+
+    video.addEventListener("play", sync);
+    video.addEventListener("pause", sync);
+    video.addEventListener("volumechange", sync);
+    video.addEventListener("ended", sync);
+
+    const observer = new IntersectionObserver((entries) => {
+      if (reduceMotion) return;
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          video.play().catch(() => {});
+        } else if (!video.paused) {
+          video.pause();
+        }
+      }
+    }, { threshold: 0.25 });
+    observer.observe(video);
+
+    playButton.addEventListener("click", () => {
+      video.muted = false;
+      video.play().catch(() => {});
+    });
+    unmuteButton.addEventListener("click", () => {
+      video.muted = false;
+      video.play().catch(() => {});
+    });
+
+    if (reduceMotion) {
+      video.removeAttribute("autoplay");
+      video.pause();
+    }
+    sync();
+  })();
+</script>
+</body>
+</html>

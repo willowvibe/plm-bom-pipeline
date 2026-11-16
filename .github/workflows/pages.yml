@@ -1,0 +1,65 @@
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dbt.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Build the report from clean data
+        run: make demo PYTHON=python DBT=dbt
+
+      - name: Generate the dbt docs site
+        run: make dbt-docs PYTHON=python DBT=dbt
+
+      - name: Assemble the Pages artifact
+        run: |
+          test -s site/plm-bom-pipeline-demo.mp4
+          test -s site/plm-bom-pipeline-demo-poster.jpg
+          mkdir -p _site/dbt-docs
+          cp -R site/. _site/
+          cp dbt/target/index.html dbt/target/manifest.json dbt/target/catalog.json _site/dbt-docs/
+          test -s _site/report/index.html
+          test -s _site/dbt-docs/index.html
+          test -s _site/plm-bom-pipeline-demo.mp4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
