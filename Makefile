@@ -5,7 +5,7 @@ DBT_DIR := dbt
 RAW_DIR := $(CURDIR)/data/raw
 DUCKDB_PATH := $(CURDIR)/data/plm.duckdb
 
-.PHONY: data messy test dbt dbt-docs verify-defects clean
+.PHONY: data messy test dbt dbt-docs report demo verify-defects clean
 
 data:
 	$(PYTHON) -m generator --out data/raw
@@ -36,6 +36,14 @@ dbt-docs: data
 	PLM_RAW_DIR=$(RAW_DIR) PLM_DUCKDB_PATH=$(DUCKDB_PATH) \
 		$(DBT) docs generate \
 		--project-dir $(DBT_DIR) --profiles-dir $(DBT_DIR)
+
+# Build dbt, then write the self-contained static report. PYTHON must have
+# duckdb installed (the dbt virtualenv does); DBT must point at dbt.
+report: dbt
+	$(PYTHON) report/build_report.py --db $(DUCKDB_PATH) --out site/report/index.html
+
+# One command from empty checkout to data, marts, tests and report.
+demo: report
 
 clean:
 	rm -rf data/raw data/raw-messy data/plm.duckdb \

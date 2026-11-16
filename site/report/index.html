@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLM / BOM Intelligence — Synthetic Bicycle Dataset</title>
+<style>
+  :root {
+    --paper: #f7f5f0;
+    --ink: #17191c;
+    --muted: #5b5f66;
+    --rule: #d8d3c8;
+    --panel: #efece4;
+    --accent: #c2410c;
+    --teal: #0f766e;
+    --stone: #a8a29e;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1120px; margin: 0 auto; padding: 40px 32px 56px; }
+  .eyebrow {
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    font-size: .72rem;
+    color: var(--accent);
+  }
+  .eyebrow-small { font-size: .6rem; }
+  .hero { border-top: 3px solid var(--ink); padding-top: 22px; }
+  .hero h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(2.3rem, 5.5vw, 4.1rem);
+    line-height: 1.02;
+    letter-spacing: -.025em;
+    margin: 14px 0 18px;
+    max-width: 18ch;
+  }
+  .subtitle {
+    max-width: 64ch;
+    color: var(--muted);
+    font-size: 1.05rem;
+    margin: 0 0 18px;
+  }
+  .subtitle strong { color: var(--ink); font-weight: 600; }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 5px 9px;
+    border-radius: 2px;
+  }
+  .kpis {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    margin-top: 30px;
+  }
+  .kpi { padding: 16px 14px 14px; border-right: 1px solid var(--rule); }
+  .kpi:last-child { border-right: 0; }
+  .kpi-value {
+    font-family: var(--mono);
+    font-size: clamp(1.5rem, 3vw, 2.1rem);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .kpi-label {
+    font-family: var(--mono);
+    font-size: .66rem;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+  main { display: block; }
+  section { margin-top: 64px; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    border-top: 1px solid var(--ink);
+    padding-top: 14px;
+  }
+  .section-num {
+    font-family: var(--mono);
+    font-size: .72rem;
+    color: var(--accent);
+    letter-spacing: .12em;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    letter-spacing: -.015em;
+    margin: 0;
+  }
+  h3 { font-family: var(--serif); font-weight: 600; margin: 0; }
+  .subhead {
+    font-family: var(--serif);
+    font-size: 1.1rem;
+    margin: 32px 0 0;
+  }
+  .note { color: var(--muted); font-size: .9rem; max-width: 70ch; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .mono-muted {
+    font-family: var(--mono);
+    font-size: .75rem;
+    color: var(--muted);
+    letter-spacing: .04em;
+  }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 22px; }
+  table.data-table { width: 100%; border-collapse: collapse; min-width: 720px; }
+  .data-table.wide { min-width: 900px; }
+  .data-table th {
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+    padding: 0 12px 10px;
+    border-bottom: 1px solid var(--ink);
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: 11px 12px;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  .data-table .num {
+    text-align: right;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .data-table .mono { white-space: nowrap; }
+  .data-table .strong { font-weight: 600; }
+  .chart {
+    display: flex;
+    align-items: flex-end;
+    gap: clamp(10px, 3.4vw, 30px);
+    margin: 30px 0 0;
+    padding: 0 10px;
+  }
+  .bar { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+  .bar-value {
+    font-family: var(--mono);
+    font-size: .78rem;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 8px;
+  }
+  .bar-track {
+    width: 100%;
+    height: 180px;
+    display: flex;
+    align-items: flex-end;
+    border-bottom: 1px solid var(--ink);
+  }
+  .bar-fill { width: 100%; background: var(--ink); min-height: 4px; }
+  .bar-fill-accent { background: var(--accent); }
+  .bar-label {
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin-top: 9px;
+  }
+  .cycle-grid {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 36px;
+    align-items: center;
+    margin-top: 26px;
+  }
+  .donut-wrap { display: flex; justify-content: center; }
+  .donut { width: 200px; aspect-ratio: 1; border-radius: 50%; position: relative; }
+  .donut-hole {
+    position: absolute;
+    inset: 27%;
+    background: var(--paper);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    text-align: center;
+  }
+  .donut-hole strong {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    font-variant-numeric: tabular-nums;
+    display: block;
+    line-height: 1;
+  }
+  .donut-hole span {
+    font-family: var(--mono);
+    font-size: .62rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .legend { display: grid; gap: 10px; }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 9px;
+  }
+  .swatch { width: 10px; height: 10px; display: inline-block; border-radius: 1px; flex: none; }
+  .legend-label { flex: 1; font-size: .9rem; text-transform: capitalize; }
+  .legend-count { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin-top: 26px;
+  }
+  .stat { padding: 16px 16px 14px 0; border-right: 1px solid var(--rule); }
+  .stat:last-child { border-right: 0; padding-right: 0; }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 1.45rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .stat-label {
+    font-family: var(--mono);
+    font-size: .62rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.4;
+  }
+  .impact-card {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 28px;
+    align-items: start;
+    background: var(--panel);
+    border-left: 4px solid var(--accent);
+    padding: 26px 28px;
+    margin-top: 26px;
+  }
+  .impact-number {
+    font-family: var(--serif);
+    font-size: 5.6rem;
+    line-height: .85;
+    color: var(--accent);
+    letter-spacing: -.04em;
+  }
+  .impact-number small {
+    display: block;
+    font-family: var(--mono);
+    font-size: .64rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+  .impact-body h3 { font-size: 1.5rem; }
+  .impact-title { font-family: var(--serif); font-size: 1.15rem; margin: 8px 0 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+  .chip {
+    font-family: var(--mono);
+    font-size: .7rem;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    padding: 5px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .callout {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 26px;
+    align-items: center;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 22px 0;
+    margin-top: 26px;
+  }
+  .callout-number {
+    font-family: var(--serif);
+    font-size: 4.4rem;
+    line-height: .85;
+    color: var(--accent);
+    letter-spacing: -.04em;
+  }
+  .callout-title { font-family: var(--serif); font-size: 1.25rem; margin: 0 0 6px; }
+  .quality-hero {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 28px;
+    align-items: center;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 24px 0;
+    margin-top: 26px;
+  }
+  .quality-number {
+    font-family: var(--mono);
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--teal);
+    letter-spacing: -.03em;
+  }
+  .quality-number.long { font-size: clamp(1.6rem, 3.2vw, 2.05rem); }
+  .quality-title { font-family: var(--serif); font-size: 1.35rem; margin: 0 0 6px; }
+  .defect-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-top: 22px;
+  }
+  .defect-card {
+    border: 1px solid var(--rule);
+    border-top: 2px solid var(--ink);
+    padding: 16px 16px 14px;
+  }
+  .defect-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: baseline;
+  }
+  .defect-head h3 { font-size: 1.02rem; }
+  .seeded {
+    font-family: var(--mono);
+    font-size: .62rem;
+    color: var(--accent);
+    text-align: right;
+  }
+  .defect-desc { color: var(--muted); font-size: .84rem; margin: 8px 0 12px; }
+  .defect-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+    border-top: 1px solid var(--rule);
+    padding-top: 10px;
+  }
+  .defect-meta code {
+    font-family: var(--mono);
+    font-size: .66rem;
+    color: var(--ink);
+    word-break: break-all;
+  }
+  .ok {
+    font-family: var(--mono);
+    font-size: .62rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--teal);
+    white-space: nowrap;
+  }
+  .recon-bar { display: flex; width: 100%; height: 16px; background: var(--rule); margin-top: 22px; }
+  .recon-seg { height: 100%; }
+  .recon-legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 14px; }
+  .recon-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: .7rem;
+    color: var(--muted);
+  }
+  .recon-item .legend-count { color: var(--ink); }
+  .status {
+    font-family: var(--mono);
+    font-size: .64rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .status-closed { color: var(--ink); }
+  .status-approved { color: var(--teal); }
+  .status-open { color: var(--accent); }
+  .status-rejected { color: var(--stone); }
+  .status-other { color: var(--muted); }
+  footer {
+    margin-top: 72px;
+    border-top: 1px solid var(--ink);
+    padding-top: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+  .footer-title {
+    font-family: var(--mono);
+    font-size: .66rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .commands {
+    font-family: var(--mono);
+    font-size: .78rem;
+    line-height: 1.9;
+    margin: 0;
+    white-space: pre;
+    color: var(--ink);
+  }
+  footer p { color: var(--muted); font-size: .82rem; margin: 0 0 10px; max-width: 52ch; }
+  @media (max-width: 760px) {
+    .page { padding: 28px 16px 44px; }
+    .hero h1 { font-size: clamp(2rem, 8vw, 2.6rem); }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .kpi { border-bottom: 1px solid var(--rule); }
+    .kpi:nth-child(2n) { border-right: 0; }
+    .kpi:last-child { grid-column: 1 / -1; border-bottom: 0; }
+    .cycle-grid, .quality-hero, .impact-card, .callout, footer { grid-template-columns: 1fr; }
+    .impact-number, .callout-number { font-size: 4rem; }
+    .stat-row { grid-template-columns: repeat(2, 1fr); }
+    .stat:nth-child(2n) { border-right: 0; }
+    .defect-grid { grid-template-columns: 1fr; }
+    .bar-track { height: 130px; }
+  }
+  @media print {
+    html, body { background: #fff; }
+    .page { max-width: none; padding: 0; }
+    section, .impact-card, .defect-card, .quality-hero, .callout, .kpi {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .table-wrap { overflow: visible; }
+    table.data-table { min-width: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+<header class="hero">
+  <div class="eyebrow">PLM / BOM INTELLIGENCE</div>
+  <h1>From PLM exports to tested BOM intelligence</h1>
+  <p class="subtitle">A synthetic bicycle manufacturer's product, BOM, revision and change-control data, modelled as of <strong>2026-06-01</strong>. Every figure below comes from the generated CSVs, the dbt marts or the dbt test results.</p>
+  <span class="badge">Synthetic data · seed 42</span>
+  <div class="kpis"><div class="kpi"><div class="kpi-value">18</div><div class="kpi-label">Products</div></div><div class="kpi"><div class="kpi-value">2,000</div><div class="kpi-label">Parts</div></div><div class="kpi"><div class="kpi-value">2,027</div><div class="kpi-label">BOM lines</div></div><div class="kpi"><div class="kpi-value">75</div><div class="kpi-label">Changes</div></div><div class="kpi"><div class="kpi-value">5</div><div class="kpi-label">Max BOM depth</div></div></div>
+</header>
+<main>
+<section id="bom-structure">
+  <div class="section-head"><span class="section-num">01</span><h2>BOM structure</h2></div>
+  <div class="chart" role="img" aria-label="BOM lines by level"><div class="bar"><div class="bar-value">54</div><div class="bar-track"><div class="bar-fill" style="height:6.4%"></div></div><div class="bar-label">L1</div></div><div class="bar"><div class="bar-value">162</div><div class="bar-track"><div class="bar-fill" style="height:19.3%"></div></div><div class="bar-label">L2</div></div><div class="bar"><div class="bar-value">324</div><div class="bar-track"><div class="bar-fill" style="height:38.6%"></div></div><div class="bar-label">L3</div></div><div class="bar"><div class="bar-value">648</div><div class="bar-track"><div class="bar-fill" style="height:77.2%"></div></div><div class="bar-label">L4</div></div><div class="bar"><div class="bar-value">839</div><div class="bar-track"><div class="bar-fill bar-fill-accent" style="height:100.0%"></div></div><div class="bar-label">L5</div></div></div>
+  <p class="note">2,045 explosion rows. The deepest product path is 5 edges. 1,487 rows are non-assembly leaves (72.7% of explosion rows).</p>
+  <h3 class="subhead">Top products by rolled-up cost</h3>
+  <div class="table-wrap"><table class="data-table"><thead><tr><th>Product</th><th>Family</th><th class="num">Total cost</th><th class="num">Weight (kg)</th><th class="num">BOM lines</th><th class="num">Depth</th></tr></thead><tbody><tr><td class="strong">Tempo 2023</td><td>Road</td><td class="num">128,774.61</td><td class="num">4,521.8</td><td class="num">113</td><td class="num">5</td></tr><tr><td class="strong">Switchback 2024</td><td>Mountain</td><td class="num">104,674.34</td><td class="num">5,400.4</td><td class="num">113</td><td class="num">5</td></tr><tr><td class="strong">Transit 2024</td><td>City</td><td class="num">77,396.46</td><td class="num">6,410.9</td><td class="num">113</td><td class="num">5</td></tr><tr><td class="strong">Ridge 2023</td><td>Mountain</td><td class="num">62,436.58</td><td class="num">2,763.6</td><td class="num">113</td><td class="num">5</td></tr><tr><td class="strong">Aero 2024</td><td>Road</td><td class="num">62,249.35</td><td class="num">3,142.4</td><td class="num">113</td><td class="num">5</td></tr></tbody></table></div>
+</section>
+
+<section id="change-control">
+  <div class="section-head"><span class="section-num">02</span><h2>Change control</h2></div>
+  <div class="cycle-grid">
+    <div class="donut-wrap"><div class="donut" style="background: conic-gradient(#17191c 0.0000% 45.3333%, #0f766e 45.3333% 70.6667%, #c2410c 70.6667% 86.6667%, #a8a29e 86.6667% 100.0000%)"><div class="donut-hole"><strong>75</strong><span>changes</span></div></div></div>
+    <div>
+      <div class="legend"><div class="legend-item"><span class="swatch" style="background:#17191c"></span><span class="legend-label">closed</span><span class="legend-count">34</span></div><div class="legend-item"><span class="swatch" style="background:#0f766e"></span><span class="legend-label">approved</span><span class="legend-count">19</span></div><div class="legend-item"><span class="swatch" style="background:#c2410c"></span><span class="legend-label">open</span><span class="legend-count">12</span></div><div class="legend-item"><span class="swatch" style="background:#a8a29e"></span><span class="legend-label">rejected</span><span class="legend-count">10</span></div></div>
+      <div class="stat-row"><div class="stat"><div class="stat-value">2.0</div><div class="stat-label">Median days to approval</div></div><div class="stat"><div class="stat-value">3.0</div><div class="stat-label">Average days to approval</div></div><div class="stat"><div class="stat-value">9.0</div><div class="stat-label">Median days to close</div></div><div class="stat"><div class="stat-value">13.9</div><div class="stat-label">Average days to close</div></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="change-impact">
+  <div class="section-head"><span class="section-num">03</span><h2>Change impact</h2></div>
+  <p class="note">Each change is mapped to every product that reaches its affected part. Family-shared raw materials make some changes cross all six products in a family.</p>
+  <div class="stat-row"><div class="stat"><div class="stat-value">75</div><div class="stat-label">Changes with impact</div></div><div class="stat"><div class="stat-value">205</div><div class="stat-label">Change/product pairs</div></div><div class="stat"><div class="stat-value">26</div><div class="stat-label">Changes reaching &gt;1 product</div></div><div class="stat"><div class="stat-value">6</div><div class="stat-label">Max products per change</div></div></div>
+  <article class="impact-card"><div class="impact-number">6<small>products affected</small></div><div class="impact-body"><div class="eyebrow eyebrow-small">Example change</div><h3>ECN-0001 <span class="mono-muted">ECN · closed</span></h3><p class="impact-title">Release change: Implement: Reduce frame tube wall thickness (1)</p><p class="mono-muted">Affected part PART-0069</p><div class="chips"><span class="chip">Aero 2024</span><span class="chip">Aurora 2022</span><span class="chip">Endurance 2022</span><span class="chip">Gravel 2024</span><span class="chip">Tempo 2023</span><span class="chip">Velocity 2023</span></div></div></article>
+  <h3 class="subhead">Changes reaching the most products</h3>
+  <div class="table-wrap"><table class="data-table wide"><thead><tr><th>Change</th><th>Type</th><th>Status</th><th>Title</th><th>Affected part</th><th class="num">Products</th></tr></thead><tbody><tr><td class="mono strong">ECN-0001</td><td>ECN</td><td><span class="status status-closed">closed</span></td><td>Release change: Implement: Reduce frame tube wall thickness (1)</td><td class="mono">PART-0069</td><td class="num">6</td></tr><tr><td class="mono strong">ECN-0006</td><td>ECN</td><td><span class="status status-closed">closed</span></td><td>Release change: Implement: Substitute alloy plate grade (10)</td><td class="mono">PART-1305</td><td class="num">6</td></tr><tr><td class="mono strong">ECN-0007</td><td>ECN</td><td><span class="status status-closed">closed</span></td><td>Release change: Implement: Update wheel bearing seal material (13)</td><td class="mono">PART-0686</td><td class="num">6</td></tr><tr><td class="mono strong">ECN-0012</td><td>ECN</td><td><span class="status status-closed">closed</span></td><td>Release change: Implement: Qualify alternate brake lever supplier (22)</td><td class="mono">PART-0070</td><td class="num">6</td></tr><tr><td class="mono strong">ECN-0013</td><td>ECN</td><td><span class="status status-approved">approved</span></td><td>Release change: Implement: Replace painted finish with powder coat (25)</td><td class="mono">PART-0069</td><td class="num">6</td></tr><tr><td class="mono strong">ECO-0001</td><td>ECO</td><td><span class="status status-closed">closed</span></td><td>Implement: Reduce frame tube wall thickness (1)</td><td class="mono">PART-0069</td><td class="num">6</td></tr></tbody></table></div>
+</section>
+
+<section id="part-reuse">
+  <div class="section-head"><span class="section-num">04</span><h2>Part reuse</h2></div>
+  <div class="callout"><div class="callout-number">9</div><div><p class="callout-title">raw materials are shared across each product family</p><p class="note">Each shared raw material is reachable from all 6 products in its family, so where-used and change impact cross product boundaries.</p></div></div>
+  <h3 class="subhead">Top shared parts</h3>
+  <div class="table-wrap"><table class="data-table wide"><thead><tr><th>Part</th><th>Name</th><th>Type</th><th class="num">Products</th><th class="num">Direct parents</th><th class="num">Direct qty (base UoM)</th></tr></thead><tbody><tr><td class="mono strong">PART-0068</td><td>6061 Aluminum Tube for Bearing for Aurora 2022 Frame Subassembly Subassembly 1 Module 1</td><td>raw_material</td><td class="num">6</td><td class="num">6</td><td class="num">52.0</td></tr><tr><td class="mono strong">PART-0069</td><td>4130 Steel Tube for Axle for Aurora 2022 Frame Subassembly Subassembly 1 Module 1</td><td>raw_material</td><td class="num">6</td><td class="num">6</td><td class="num">103.0</td></tr><tr><td class="mono strong">PART-0070</td><td>Carbon Fiber Sheet for Spacer for Aurora 2022 Frame Subassembly Subassembly 1 Module 2</td><td>raw_material</td><td class="num">6</td><td class="num">6</td><td class="num">51.5</td></tr><tr><td class="mono strong">PART-0686</td><td>Powder Coat for Spacer for Summit 2022 Frame Subassembly Subassembly 1 Module 1</td><td>raw_material</td><td class="num">6</td><td class="num">6</td><td class="num">53.0</td></tr><tr><td class="mono strong">PART-0687</td><td>Rubber Compound for Bolt Kit for Summit 2022 Frame Subassembly Subassembly 1 Module 1</td><td>raw_material</td><td class="num">6</td><td class="num">6</td><td class="num">100.5</td></tr><tr><td class="mono strong">PART-0688</td><td>Copper Wire for Pulley for Summit 2022 Frame Subassembly Subassembly 1 Module 2</td><td>raw_material</td><td class="num">6</td><td class="num">6</td><td class="num">51.5</td></tr></tbody></table></div>
+</section>
+
+<section id="data-quality">
+  <div class="section-head"><span class="section-num">05</span><h2>Data quality</h2></div>
+  <div class="quality-hero"><div class="quality-number">195/195</div><div><p class="quality-title">checks pass on clean data</p><p class="note">20 model nodes · 174 data tests · 1 unit test. 0 failures · 0 errors · 0 skipped.</p></div></div>
+  <div class="defect-grid"><article class="defect-card"><div class="defect-head"><h3>Cyclic BOM</h3><span class="seeded">Seeded in messy data: 1 line</span></div><p class="defect-desc">A BOM line points from a descendant back to one of its ancestors.</p><div class="defect-meta"><code>assert_no_cyclic_bom</code><span class="ok">0 violations on clean</span></div></article><article class="defect-card"><div class="defect-head"><h3>Orphan parts</h3><span class="seeded">Seeded in messy data: 2 parts</span></div><p class="defect-desc">Parts with no BOM parent that are not product top-level parts.</p><div class="defect-meta"><code>assert_no_orphan_parts</code><span class="ok">0 violations on clean</span></div></article><article class="defect-card"><div class="defect-head"><h3>Released assembly with unreleased child</h3><span class="seeded">Seeded in messy data: 1 line</span></div><p class="defect-desc">A released assembly revision uses a child revision that is still in_work.</p><div class="defect-meta"><code>assert_no_released_assembly_unreleased_child</code><span class="ok">0 violations on clean</span></div></article><article class="defect-card"><div class="defect-head"><h3>Overlapping revision effectivity</h3><span class="seeded">Seeded in messy data: 1 part / 2 revisions</span></div><p class="defect-desc">Two released revisions of the same part have overlapping effectivity windows.</p><div class="defect-meta"><code>assert_no_overlapping_revision_effectivity</code><span class="ok">0 violations on clean</span></div></article><article class="defect-card"><div class="defect-head"><h3>Zero or negative quantity</h3><span class="seeded">Seeded in messy data: 2 lines</span></div><p class="defect-desc">At least one BOM line has a quantity of zero or less.</p><div class="defect-meta"><code>assert_no_zero_or_negative_quantity</code><span class="ok">0 violations on clean</span></div></article><article class="defect-card"><div class="defect-head"><h3>UoM mismatch</h3><span class="seeded">Seeded in messy data: 1 line</span></div><p class="defect-desc">At least one BOM line uses a unit of measure that differs from the child part base UoM.</p><div class="defect-meta"><code>assert_no_uom_mismatch</code><span class="ok">0 violations on clean</span></div></article><article class="defect-card"><div class="defect-head"><h3>Closed ECO without ECN</h3><span class="seeded">Seeded in messy data: 1 ECO</span></div><p class="defect-desc">A closed ECO has no ECN child referencing it.</p><div class="defect-meta"><code>assert_no_eco_closed_without_ecn</code><span class="ok">0 violations on clean</span></div></article></div>
+  <p class="note">The seven singular tests catch the seeded defects. <span class="mono">make verify-defects</span> proves exactly one failure per defect and 188/188 built-in checks on every defect dataset.</p>
+</section>
+
+<section id="reconciliation">
+  <div class="section-head"><span class="section-num">06</span><h2>PLM ↔ ERP reconciliation</h2></div>
+  <div class="quality-hero"><div class="quality-number long">2,027/2,027</div><div><p class="quality-title">BOM lines match between PLM and ERP</p><p class="note">Full outer join on parent and child part numbers. The status bar shows every reconciliation bucket returned by the mart.</p></div></div>
+  <div class="recon-bar"><span class="recon-seg" style="width:100.0000%;background:#0f766e" title="match: 2,027"></span></div>
+  <div class="recon-legend"><span class="recon-item"><span class="swatch" style="background:#0f766e"></span>Match<span class="legend-count">2,027</span></span><span class="recon-item"><span class="swatch" style="background:#c2410c"></span>Quantity mismatch<span class="legend-count">0</span></span><span class="recon-item"><span class="swatch" style="background:#c2410c"></span>UoM mismatch<span class="legend-count">0</span></span><span class="recon-item"><span class="swatch" style="background:#a8a29e"></span>PLM only<span class="legend-count">0</span></span><span class="recon-item"><span class="swatch" style="background:#a8a29e"></span>ERP only<span class="legend-count">0</span></span></div>
+</section>
+</main>
+
+<footer>
+  <div>
+    <div class="footer-title">Reproduce</div>
+    <pre class="commands">make demo
+make dbt
+make report
+make verify-defects</pre>
+  </div>
+  <div>
+    <div class="footer-title">About this report</div>
+    <p>Synthetic bicycle PLM data, seed 42, as of 2026-06-01. No real company, product, supplier or person is represented.</p>
+  </div>
+</footer>
+</div>
+</body>
+</html>
