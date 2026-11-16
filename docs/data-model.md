@@ -206,6 +206,17 @@ Each switch is applied independently. The tests generate clean data, assert the 
 - Two windows overlap when the later start is strictly before the earlier end, or when the earlier window is open-ended. Windows that touch at a single date do not overlap.
 - Clean revisions start after the part's creation date; obsolete prior revisions end one day before the base revision starts; in-work revisions start 180–540 days after the base revision.
 
+## dbt layers
+
+The `dbt/` project reads the generated CSVs in place through dbt-duckdb `external_location` (`PLM_RAW_DIR`, default `data/raw`) and writes views to `data/plm.duckdb`.
+
+- **Staging** (`models/staging/stg_*.sql`, views) — one model per CSV. Columns are renamed, strings trimmed, enums lower-cased, dates and numerics cast, and empty date strings become `NULL`.
+- **`int_current_revisions`** — the released revision of each part effective on the `as_of_date` dbt var (default `2026-06-01`). It keeps revisions where `as_of_date` falls between `effective_from` and `coalesce(effective_to, '9999-12-31')` and resolves overlapping released revisions by latest `effective_from`, then `revision_code`.
+- **`int_bom_explosion`** — a recursive CTE from each product top-level part. It follows BOM lines whose effectivity window contains `as_of_date` and whose parent revision is the current released revision, and emits `product_id`, `level`, `path`, `parent_part_id`, `child_part_id`, `quantity` and `accumulated_quantity`. The traversal carries a path list so a cyclic BOM cannot loop.
+- **`int_where_used`** — one row per `(child_part_id, parent_part_id, product_id)`: the immediate parent usage plus every product that reaches the part.
+
+Build with `make dbt` or `dbt build --select staging intermediate --project-dir dbt --profiles-dir dbt` from the repository root.
+
 ## Assumptions and limitations
 
 - The dataset is entirely synthetic; no client, production or real supplier data is used.

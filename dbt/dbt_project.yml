@@ -1,0 +1,31 @@
+name: plm_bom
+version: "1.0.0"
+config-version: 2
+
+profile: plm_bom
+
+model-paths: ["models"]
+target-path: "target"
+log-path: "logs"
+packages-install-path: "dbt_packages"
+
+clean-targets:
+  - target
+  - logs
+  - dbt_packages
+
+vars:
+  # Effective date used to pick the current released revision and to filter
+  # BOM line, revision and change effectivity.
+  as_of_date: "2026-06-01"
+  # Hard recursion stop for pathological BOMs. The path guard in
+  # int_bom_explosion already prevents cycles from looping forever.
+  max_bom_depth: 20
+
+models:
+  plm_bom:
+    +materialized: view
+    staging:
+      +schema: staging
+    intermediate:
+      +schema: intermediate
