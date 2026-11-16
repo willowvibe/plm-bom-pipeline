@@ -30,21 +30,22 @@ The Makefile uses `python3` by default (`make PYTHON=python data` is supported).
 
 ## dbt models
 
-The dbt project in `dbt/` reads the generated CSVs in place with DuckDB and builds a staging and intermediate layer into `data/plm.duckdb` (gitignored). Sources use dbt-duckdb's `external_location`, so there is no separate load step.
+The dbt project in `dbt/` reads the generated CSVs in place with DuckDB and builds the staging, intermediate and mart layers into `data/plm.duckdb` (gitignored). Sources use dbt-duckdb's `external_location`, so there is no separate load step.
 
 ```bash
 python3 -m venv .venv-dbt
 . .venv-dbt/bin/activate
 pip install -r requirements-dbt.txt
 
-make dbt        # generate data, then build staging + intermediate + tests
-make dbt-docs   # generate the dbt docs site
+make dbt             # generate data, then build every layer and test
+make dbt-docs        # generate the dbt docs site
+make verify-defects  # prove defect attribution and built-in test health
 ```
 
-`make dbt` runs `dbt build --select staging intermediate` from the repository root (it also passes absolute `PLM_RAW_DIR` and `PLM_DUCKDB_PATH` paths). To run dbt directly, the same command works from the repository root:
+`make dbt` runs a full `dbt build` from the repository root (it also passes absolute `PLM_RAW_DIR` and `PLM_DUCKDB_PATH` paths). To run dbt directly, the same command works from the repository root:
 
 ```bash
-dbt build --select staging intermediate --project-dir dbt --profiles-dir dbt
+dbt build --project-dir dbt --profiles-dir dbt
 dbt build --select int_bom_explosion --project-dir dbt --profiles-dir dbt \
   --vars '{as_of_date: "2025-01-01"}'
 dbt docs generate --project-dir dbt --profiles-dir dbt
@@ -54,8 +55,25 @@ Layers:
 
 - **staging** — one typed, renamed view per CSV (`stg_*`), enums lower-cased.
 - **intermediate** — `int_current_revisions` (released revision per part as of the `as_of_date` var, default `2026-06-01`), `int_bom_explosion` (recursive BOM explosion with a cycle guard and accumulated quantities) and `int_where_used` (direct parent and product usage).
+- **marts** — seven analysis tables in the `main_marts` schema:
+
+| Mart | Grain | Contents |
+|---|---|---|
+| `bom_explosion` | product traversal path | Explosion enriched with names, part type/UoM, cost, weight, `extended_cost` and `is_leaf`. |
+| `bom_cost_weight_rollup` | product | `total_cost`, `total_weight_kg`, `bom_line_count`, `max_depth` over leaf parts only. |
+| `where_used` | child/parent/product | Direct where-used with child and parent part names and product name. |
+| `eco_cycle_time` | change | Approval/close dates, null-safe day counts and `cycle_status`. |
+| `change_impact` | change/product | Distinct products affected through the BOM or as the top-level part. |
+| `part_reuse` | part | `direct_parent_count`, `product_count`, `total_direct_quantity`; unused parts show zeros. |
+| `bom_erp_reconciliation` | parent/child part number | Full outer join of PLM and ERP BOMs with quantities, UoMs, delta and `reconciliation_status`. |
 
 The `int_bom_explosion` unit test is a hand-checked three-level fixture with known quantities; run it with `dbt test --select int_bom_explosion --project-dir dbt --profiles-dir dbt`.
+
+## Data quality
+
+`dbt/tests/` holds seven singular tests, one per seeded defect: `assert_no_cyclic_bom`, `assert_no_orphan_parts`, `assert_no_released_assembly_unreleased_child`, `assert_no_overlapping_revision_effectivity`, `assert_no_zero_or_negative_quantity`, `assert_no_uom_mismatch` and `assert_no_eco_closed_without_ecn`.
+
+Each test returns zero rows on clean data and rows only when its own defect is present. `make verify-defects` proves that attribution end to end: it generates clean data, each defect alone and all seven together into temporary directories, and for each case runs a full `dbt build` plus a second build with the seven singular tests excluded. The first pass checks that clean has zero failures, each single defect fails exactly its own test, and `all` fails exactly seven. The second pass removes dbt's build gate and checks that all 188 built-in model, generic, unit and mart nodes still pass (20 model successes plus 168 test passes), with no skipped models. The command accepts a dbt path, for example `make verify-defects DBT=/tmp/plm-dbt-venv/bin/dbt`. See [`docs/defects.md`](docs/defects.md) for the defect-to-test table.
 
 ## What is generated
 
@@ -63,7 +81,7 @@ The `int_bom_explosion` unit test is a hand-checked three-level fixture with kno
 |---|---|---|
 | `families.csv` | 3 | Road, Mountain and City families |
 | `products.csv` | 18 | Products and their top-level assembly |
-| `parts.csv` | 2,000 | Assemblies, components and raw materials |
+| `parts.csv` | 2,000 | Assemblies, components and raw materials with standard cost and unit weight |
 | `part_revisions.csv` | 2,502 | Released, in-work and superseded revisions |
 | `boms.csv` | 1,982 | Multi-level parent/child BOM lines |
 | `changes.csv` | 75 | ECR, ECO and ECN records |
@@ -77,4 +95,4 @@ See [`docs/data-model.md`](docs/data-model.md) for keys, relationships, effectiv
 
 ## Roadmap
 
-Milestone 1 is the deterministic generator and its test suite. Milestone 2 adds the dbt staging and intermediate layers. Later milestones add defect-specific data quality tests, marts and a report over the synthetic dataset.
+Milestone 1 is the deterministic generator and its test suite. Milestone 2 adds the dbt staging and intermediate layers. Milestone 3 (done) adds the mart layer, the seven defect-specific data-quality tests and the exact-one-failure attribution harness. A later milestone can add a report over the synthetic dataset.
