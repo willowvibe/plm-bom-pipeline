@@ -7,6 +7,7 @@ produces the same dataset.
 
 from __future__ import annotations
 
+import hashlib
 import random
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -124,6 +125,15 @@ ECR_TITLES = [
 
 APPROVER_ROLES = ["engineering", "quality", "manufacturing", "procurement"]
 
+# Plausible weight range in kilograms per part type. Weights are derived from a
+# stable hash of the part id rather than the shared random stream so that
+# adding the column cannot perturb any pre-existing value.
+WEIGHT_RANGES_KG = {
+    "raw_material": (0.02, 2.0),
+    "component": (0.1, 3.0),
+    "assembly": (1.0, 10.0),
+}
+
 
 @dataclass
 class Family:
@@ -150,6 +160,7 @@ class Part:
     uom: str
     lifecycle_state: str
     standard_cost: str
+    weight_kg: str
     created_at: str
 
 
@@ -244,6 +255,14 @@ def _iso(value: date) -> str:
     return value.isoformat()
 
 
+def _weight_kg(part_id: str, part_type: str) -> str:
+    """Deterministic weight in kilograms, independent of the random stream."""
+    low, high = WEIGHT_RANGES_KG[part_type]
+    digest = hashlib.sha256(f"{part_id}|weight".encode("utf-8")).digest()
+    fraction = int.from_bytes(digest[:8], "big") / 2**64
+    return f"{low + fraction * (high - low):.3f}"
+
+
 def build_dataset(seed: int) -> Dataset:
     """Build the full clean dataset for ``seed``."""
     rng = random.Random(seed)
@@ -269,8 +288,9 @@ def build_dataset(seed: int) -> Dataset:
         if part_seq > TOTAL_PARTS:
             raise RuntimeError("part budget exceeded")
         created = BASE_DATE + timedelta(days=rng.randrange(0, 1100))
+        part_id = f"PART-{part_seq:04d}"
         part = Part(
-            part_id=f"PART-{part_seq:04d}",
+            part_id=part_id,
             part_number=f"PN-{FAMILY_CODE[family_id]}-{part_seq:05d}",
             name=name,
             part_type=part_type,
@@ -278,6 +298,7 @@ def build_dataset(seed: int) -> Dataset:
             uom=uom,
             lifecycle_state="released",
             standard_cost=_money(rng.uniform(cost_lo, cost_hi)),
+            weight_kg=_weight_kg(part_id, part_type),
             created_at=_iso(created),
         )
         parts.append(part)

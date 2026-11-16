@@ -15,6 +15,7 @@ renamed as (
         trim(uom) as uom,
         lower(trim(lifecycle_state)) as lifecycle_state,
         cast(standard_cost as decimal(12, 2)) as standard_cost,
+        cast(weight_kg as decimal(12, 3)) as weight_kg,
         cast(created_at as date) as created_at
     from source
 

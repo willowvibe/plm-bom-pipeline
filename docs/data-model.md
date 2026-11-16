@@ -19,6 +19,7 @@ The generator models a fictional bicycle manufacturer. It is deliberately generi
 - Every table is sorted by its primary key before writing. CSV files use `\n` line endings; JSON is written with sorted keys and two-space indentation.
 - Running twice with the same seed produces byte-identical files. Running with a different seed changes the values.
 - Defect injection uses a separate random stream from base-data generation, so enabling a defect does not perturb the clean rows around it.
+- `weight_kg` is derived from a SHA-256 hash of the part id rather than the shared random stream, so adding or reading weights never perturbs any other column.
 
 ## Entities
 
@@ -51,6 +52,7 @@ The generator models a fictional bicycle manufacturer. It is deliberately generi
 | `uom` | Base unit of measure |
 | `lifecycle_state` | `draft`, `released` or `obsolete`. Clean data uses `released` for most parts and `draft` where the latest revision is `in_work`; superseded revision history carries the `obsolete` status. |
 | `standard_cost` | Decimal string with two places |
+| `weight_kg` | Unit weight in kilograms, three places. Derived from a stable SHA-256 hash of the part id, mapped into a per-type range: raw materials 0.02–2.0 kg, components 0.1–3.0 kg, assemblies 1–10 kg. |
 | `created_at` | ISO date |
 
 ### `part_revisions.csv`
@@ -208,14 +210,34 @@ Each switch is applied independently. The tests generate clean data, assert the 
 
 ## dbt layers
 
-The `dbt/` project reads the generated CSVs in place through dbt-duckdb `external_location` (`PLM_RAW_DIR`, default `data/raw`) and writes views to `data/plm.duckdb`.
+The `dbt/` project reads the generated CSVs in place through dbt-duckdb `external_location` (`PLM_RAW_DIR`, default `data/raw`) and writes the layers below to `data/plm.duckdb`.
 
 - **Staging** (`models/staging/stg_*.sql`, views) — one model per CSV. Columns are renamed, strings trimmed, enums lower-cased, dates and numerics cast, and empty date strings become `NULL`.
 - **`int_current_revisions`** — the released revision of each part effective on the `as_of_date` dbt var (default `2026-06-01`). It keeps revisions where `as_of_date` falls between `effective_from` and `coalesce(effective_to, '9999-12-31')` and resolves overlapping released revisions by latest `effective_from`, then `revision_code`.
 - **`int_bom_explosion`** — a recursive CTE from each product top-level part. It follows BOM lines whose effectivity window contains `as_of_date` and whose parent revision is the current released revision, and emits `product_id`, `level`, `path`, `parent_part_id`, `child_part_id`, `quantity` and `accumulated_quantity`. The traversal carries a path list so a cyclic BOM cannot loop.
 - **`int_where_used`** — one row per `(child_part_id, parent_part_id, product_id)`: the immediate parent usage plus every product that reaches the part.
 
-Build with `make dbt` or `dbt build --select staging intermediate --project-dir dbt --profiles-dir dbt` from the repository root.
+Build with `make dbt` or `dbt build --project-dir dbt --profiles-dir dbt` from the repository root.
+
+### Marts
+
+The mart layer is materialized as tables in the `main_marts` schema (`+schema: marts`, `+materialized: table`). Every model uses the same `as_of_date` var as the intermediate layer, either directly or through a reference to an intermediate model.
+
+| Mart | Grain | Contents |
+|---|---|---|
+| `bom_explosion` | one row per product traversal path | `int_bom_explosion` enriched with product name/family, part name/type/UoM, `standard_cost`, `weight_kg`, `extended_cost = accumulated_quantity * standard_cost` and `is_leaf` (part type is not `assembly`). |
+| `bom_cost_weight_rollup` | one row per product | `total_cost`, `total_weight_kg`, `bom_line_count` and `max_depth`. Cost and weight sum leaf parts only to avoid double counting; missing values coalesce to 0. |
+| `where_used` | one row per `(child part, immediate parent, product)` | `int_where_used` enriched with child/parent part names and types plus the product name and family. The direct parent relationship is preserved. |
+| `eco_cycle_time` | one row per change | `initiated_at`, `approved_at`, `closed_at`, null-safe `days_to_approval` and `days_to_close`, and a `cycle_status` of `open`, `approved`, `rejected` or `closed`. |
+| `change_impact` | one row per `(change, product)` | Products that reach the change's affected part through the BOM, plus products whose top-level part is the affected part. Carries change type/status/title. |
+| `part_reuse` | one row per part | `direct_parent_count`, `product_count` and `total_direct_quantity` (coalesced 0) as of `as_of_date`. `product_count` includes each product's own top-level part. Parts used nowhere still appear with zeros. |
+| `bom_erp_reconciliation` | one row per parent/child part-number key | Full outer join of the active PLM BOM against `stg_erp_bom`, with `plm_quantity`, `erp_quantity`, `plm_uom`, `erp_uom`, `quantity_delta` and a `reconciliation_status` of `match`, `quantity_mismatch`, `uom_mismatch`, `plm_only` or `erp_only`. |
+
+The mart schema tests cover keys, relationships and enum values only. They deliberately do not assert PLM/ERP equality, positive quantities or universal part usage, because those properties are exactly what the seeded defects violate.
+
+### Defect tests
+
+`dbt/tests/` contains seven singular tests, one per seeded defect: `assert_no_cyclic_bom`, `assert_no_orphan_parts`, `assert_no_released_assembly_unreleased_child`, `assert_no_overlapping_revision_effectivity`, `assert_no_zero_or_negative_quantity`, `assert_no_uom_mismatch` and `assert_no_eco_closed_without_ecn`. They read the staging/intermediate models, return zero rows on clean data, and return rows only for their own defect. See [`defects.md`](defects.md) for the mutation each one detects and the exact-one-failure verification.
 
 ## Assumptions and limitations
 

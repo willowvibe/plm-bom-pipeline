@@ -69,6 +69,9 @@ models:
                 values: ["draft", "released", "obsolete"]
       - name: standard_cost
         data_tests: [not_null]
+      - name: weight_kg
+        description: "Unit weight in kilograms, derived deterministically from the part id."
+        data_tests: [not_null]
       - name: created_at
         data_tests: [not_null]
 

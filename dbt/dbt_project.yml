@@ -29,3 +29,6 @@ models:
       +schema: staging
     intermediate:
       +schema: intermediate
+    marts:
+      +schema: marts
+      +materialized: table

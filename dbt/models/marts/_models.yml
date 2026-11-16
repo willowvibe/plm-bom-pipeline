@@ -1,0 +1,214 @@
+version: 2
+
+models:
+  - name: bom_explosion
+    description: >-
+      Enriched multi-level BOM explosion as of as_of_date. One row per product
+      traversal path, with product/family names, child part attributes,
+      extended cost (accumulated quantity times standard cost) and an is_leaf
+      flag for non-assembly parts.
+    columns:
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: product_name
+        data_tests: [not_null]
+      - name: family_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_families')
+                field: family_id
+      - name: path
+        description: "Unique traversal path; the row key."
+        data_tests: [unique, not_null]
+      - name: child_part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: part_type
+        data_tests: [not_null]
+      - name: extended_cost
+        data_tests: [not_null]
+      - name: is_leaf
+        data_tests: [not_null]
+
+  - name: bom_cost_weight_rollup
+    description: >-
+      One row per product. Cost and weight sum only leaf parts
+      (part_type <> 'assembly') to avoid double counting; bom_line_count counts
+      explosion rows below the top assembly and max_depth is the deepest level
+      reached. Missing values are coalesced to zero.
+    columns:
+      - name: product_id
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: family_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_families')
+                field: family_id
+      - name: total_cost
+        data_tests: [not_null]
+      - name: total_weight_kg
+        data_tests: [not_null]
+      - name: bom_line_count
+        data_tests: [not_null]
+      - name: max_depth
+        data_tests: [not_null]
+
+  - name: where_used
+    description: >-
+      Direct where-used relationships as of as_of_date. One row per
+      (child part, immediate parent part, product) with readable part and
+      product names.
+    columns:
+      - name: where_used_key
+        data_tests: [unique, not_null]
+      - name: child_part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: parent_part_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+
+  - name: eco_cycle_time
+    description: >-
+      One row per engineering change with initiated/approved/closed dates,
+      days to approval and close (null when the date is absent) and a
+      cycle_status of open, approved, rejected or closed.
+    columns:
+      - name: change_id
+        data_tests: [unique, not_null]
+      - name: change_type
+        data_tests: [not_null]
+      - name: status
+        data_tests: [not_null]
+      - name: cycle_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["open", "approved", "rejected", "closed"]
+
+  - name: change_impact
+    description: >-
+      One row per distinct (change, product) pair that the change affects,
+      either because the product reaches the affected part through the BOM or
+      because the affected part is the product's top-level part.
+    columns:
+      - name: change_product_key
+        description: "Surrogate key over (change_id, product_id)."
+        data_tests: [unique, not_null]
+      - name: change_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_changes')
+                field: change_id
+      - name: product_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: affected_part_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+
+  - name: part_reuse
+    description: >-
+      One row per part with reuse metrics as of as_of_date. direct_parent_count
+      and total_direct_quantity come from active BOM lines; product_count is
+      the number of distinct products that use the part, including a product's
+      own top-level part. Unused parts appear with zero counts.
+    columns:
+      - name: part_id
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_id
+      - name: part_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["assembly", "component", "raw_material"]
+      - name: direct_parent_count
+        data_tests: [not_null]
+      - name: product_count
+        data_tests: [not_null]
+      - name: total_direct_quantity
+        data_tests: [not_null]
+
+  - name: bom_erp_reconciliation
+    description: >-
+      Full outer join of the active PLM BOM and the ERP BOM extract on the
+      parent/child part-number key. One row per key with PLM and ERP
+      quantities and UoMs, a null-safe quantity delta and a reconciliation
+      status of match, quantity_mismatch, uom_mismatch, plm_only or erp_only.
+    columns:
+      - name: reconciliation_key
+        description: "Surrogate key over (parent_part_number, child_part_number)."
+        data_tests: [unique, not_null]
+      - name: parent_part_number
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_number
+      - name: child_part_number
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_parts')
+                field: part_number
+      - name: reconciliation_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - match
+                  - quantity_mismatch
+                  - uom_mismatch
+                  - plm_only
+                  - erp_only

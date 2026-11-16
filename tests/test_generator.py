@@ -200,6 +200,20 @@ def test_different_seed_changes_output(tmp_path: Path) -> None:
     assert sha256(seed_42 / "boms.csv") != sha256(seed_43 / "boms.csv")
 
 
+def test_part_weights_positive_and_deterministic(tmp_path: Path) -> None:
+    first = generate_into(tmp_path, tag="weight-first")
+    second = generate_into(tmp_path, tag="weight-second")
+
+    parts = read_rows(first, "parts.csv")
+    assert len(parts) == 2000
+    for part in parts:
+        assert part["weight_kg"], part["part_id"]
+        assert float(part["weight_kg"]) > 0, part["part_id"]
+        assert len(part["weight_kg"].split(".")[-1]) == 3, part["part_id"]
+
+    assert sha256(first / "parts.csv") == sha256(second / "parts.csv")
+
+
 # ----------------------------------------------------------------------
 # Shape and clean-data invariants
 # ----------------------------------------------------------------------
