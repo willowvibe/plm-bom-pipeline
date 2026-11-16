@@ -2,6 +2,10 @@
 
 [![CI](https://github.com/willowvibe/plm-bom-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/willowvibe/plm-bom-pipeline/actions/workflows/ci.yml)
 
+[![Demo: the pipeline running, the report, and the defect harness](docs/assets/demo.gif)](https://willowvibe.github.io/plm-bom-pipeline/#demo)
+
+**[Live demo](https://willowvibe.github.io/plm-bom-pipeline/#demo)** · **[Static report](https://willowvibe.github.io/plm-bom-pipeline/report/)** · **[dbt docs](https://willowvibe.github.io/plm-bom-pipeline/dbt-docs/)**
+
 **Your PLM data — parts, BOMs and change orders — flowing into governed, tested analytics in one command.**
 
 Synthetic PLM data — parts, multi-level BOMs and ECR/ECO/ECN change control — generated deterministically for testing analytics.
@@ -144,4 +148,4 @@ The data model and tests are deliberately vendor-neutral, so the integration wor
 
 Milestone 1 is the deterministic generator and its test suite. Milestone 2 adds the dbt staging and intermediate layers. Milestone 3 adds the mart layer, the seven defect-specific data-quality tests and the exact-one-failure attribution harness. Milestone 4 adds family-shared raw materials and the static HTML report at `site/report/index.html`. Milestone 5 adds the development requirements and CI: a clean-checkout `make demo` is timed against a 120-second budget, and the defect harness runs on every dataset.
 
-Milestones 6–8 cover the README/docs audit, GitHub Pages with the report and dbt docs, the narrated demo and a `v1.0.0` release.
+Milestone 6 was the README and docs audit. Milestone 7 publishes the landing page, the static report, the generated dbt docs and a narrated 1080p walkthrough to GitHub Pages; the GIF above is a short cut of that video. Milestone 8 adds the `v1.0.0` release.
