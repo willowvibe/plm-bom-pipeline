@@ -13,6 +13,8 @@ Synthetic PLM data — parts, multi-level BOMs and ECR/ECO/ECN change control �
 
 This repository contains a small, standard-library-only Python generator for a fictional bicycle manufacturer's product lifecycle data. It writes 3 product families, 18 products, exactly 2,000 parts, revision histories with effectivity dates, five-level bills of material, ECR → ECO → ECN change records with approvals, suppliers and a synthetic ERP BOM extract. Every file is derived from one integer seed, all tables are sorted by primary key, and dates come from fixed arithmetic rather than the clock — so the same seed produces byte-identical files. Seven independently switchable defects model common PLM data-quality problems.
 
+Built and maintained by [WillowVibe](https://www.willowvibe.com). Planning a Windchill or Teamcenter migration? See our [PLM migration readiness check](https://www.willowvibe.com/services/plm-data-migration).
+
 ## Built from scratch on synthetic data
 
 All companies, products, suppliers, costs, dates and change records are fabricated. No client or production data is used. The generator models generic PLM concepts only.
@@ -154,3 +156,7 @@ Milestone 6 was the README and docs audit. Milestone 7 publishes the landing pag
 ## License
 
 MIT — see [LICENSE](LICENSE) for details. All data in this repository is synthetic and generated from seed 42; no client or production data is included.
+
+## About
+
+plm-bom-pipeline is an open-source project by [WillowVibe](https://www.willowvibe.com), a small data engineering and AI studio. Questions or project ideas: contact@willowvibe.com or [book a 30-minute call](https://cal.com/harishng/30min).
