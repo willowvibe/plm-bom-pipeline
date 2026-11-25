@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Prove one-to-one defect attribution for the dbt data-quality tests.
 
-For clean data, each of the seven seeded defects on its own, and all seven
+For clean data, each of the Eight seeded defects on its own, and all seven
 together, this script runs two passes against the same generated data:
 
 Pass 1 - full ``dbt build``: collect every failed or errored node and check
 that zero failures occur on clean data, exactly one failure named
-``assert_no_<defect>`` occurs per single defect, and exactly seven failures
+``assert_no_<defect>`` occurs per single defect, and exactly eight failures
 (one per defect test) occur when all defects are enabled.
 
-Pass 2 - ``dbt build`` with the seven singular defect tests excluded: prove
+Pass 2 - ``dbt build`` with the eight singular defect tests excluded: prove
 that the built-in generic, unit and mart tests still pass on defective data.
 A full build gates downstream nodes after a failed test, so pass 1 alone could
 let a built-in test hide behind a ``skipped`` status. Pass 2 removes that gate
@@ -49,6 +49,8 @@ DEFECT_TESTS = {
     "zero_negative_quantity": "assert_no_zero_or_negative_quantity",
     "uom_mismatch": "assert_no_uom_mismatch",
     "eco_closed_without_ecn": "assert_no_eco_closed_without_ecn",
+    "change_dates_out_of_order": "assert_no_change_dates_out_of_order",
+
 }
 
 SINGULAR_TESTS = sorted(DEFECT_TESTS.values())
