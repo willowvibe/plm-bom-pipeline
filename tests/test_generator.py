@@ -186,6 +186,24 @@ def closed_ecos_without_ecn(
     ]
 
 
+def out_of_order_change_dates(
+    changes: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    return [
+        change
+        for change in changes
+        if (
+            change["approved_at"]
+            and change["approved_at"] < change["initiated_at"]
+        )
+        or (
+            change["closed_at"]
+            and change["approved_at"]
+            and change["closed_at"] < change["approved_at"]
+        )
+    ]
+
+
 def assert_listed(manifest: dict, name: str) -> dict:
     assert name in manifest["enabled_defects"]
     assert name in manifest["defects"]
@@ -276,6 +294,7 @@ def test_clean_data_invariants(tmp_path: Path) -> None:
     assert nonpositive_quantity_lines(boms) == []
     assert uom_mismatch_lines(boms, parts) == []
     assert closed_ecos_without_ecn(changes) == []
+    assert out_of_order_change_dates(changes) == []
 
     # Normal ECR -> ECO -> ECN flow and valid approval references.
     changes_by_id = {change["change_id"]: change for change in changes}
@@ -477,6 +496,95 @@ def test_defect_eco_closed_without_ecn(tmp_path: Path) -> None:
     assert records["injected_status"] == "closed"
 
 
+def test_defect_change_dates_out_of_order(tmp_path: Path) -> None:
+    clean = generate_into(tmp_path, tag="dates-clean")
+    clean_changes = read_rows(clean, "changes.csv")
+    assert out_of_order_change_dates(clean_changes) == []
+    assert "change_dates_out_of_order" not in read_manifest(clean)["defects"]
+
+    messy = generate_into(
+        tmp_path, defects=["change_dates_out_of_order"], tag="dates-messy"
+    )
+    messy_changes = read_rows(messy, "changes.csv")
+    clean_by_id = {change["change_id"]: change for change in clean_changes}
+    messy_by_id = {change["change_id"]: change for change in messy_changes}
+
+    assert len(messy_changes) == len(clean_changes)
+    mutated = [
+        change
+        for change in messy_changes
+        if change != clean_by_id[change["change_id"]]
+    ]
+    assert len(mutated) == 2
+
+    out_of_order = out_of_order_change_dates(messy_changes)
+    assert len(out_of_order) == 2
+
+    approval_bad = [
+        change
+        for change in messy_changes
+        if change["approved_at"]
+        and change["approved_at"] < change["initiated_at"]
+    ]
+    close_bad = [
+        change
+        for change in messy_changes
+        if change["closed_at"]
+        and change["approved_at"]
+        and change["closed_at"] < change["approved_at"]
+    ]
+    assert len(approval_bad) == 1
+    assert len(close_bad) == 1
+    assert approval_bad[0]["change_id"] != close_bad[0]["change_id"]
+
+    records = assert_listed(read_manifest(messy), "change_dates_out_of_order")
+    approval_record = records["approval_before_initiation"]
+    close_record = records["close_before_approval"]
+    assert approval_record["change_id"] == approval_bad[0]["change_id"]
+    assert close_record["change_id"] == close_bad[0]["change_id"]
+
+    approval_row = messy_by_id[approval_record["change_id"]]
+    assert approval_row["approved_at"] == approval_record["injected_approved_at"]
+    assert approval_row["initiated_at"] == approval_record["initiated_at"]
+    assert (
+        clean_by_id[approval_record["change_id"]]["approved_at"]
+        == approval_record["previous_approved_at"]
+    )
+
+    close_row = messy_by_id[close_record["change_id"]]
+    assert close_row["closed_at"] == close_record["injected_closed_at"]
+    assert close_row["approved_at"] == close_record["approved_at"]
+    assert (
+        clean_by_id[close_record["change_id"]]["closed_at"]
+        == close_record["previous_closed_at"]
+    )
+
+
+def test_cli_defects_none_has_no_out_of_order_dates(tmp_path: Path) -> None:
+    out_dir = tmp_path / "cli-none"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "generator",
+            "--out",
+            str(out_dir),
+            "--seed",
+            "42",
+            "--defects",
+            "none",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    manifest = read_manifest(out_dir)
+    assert manifest["enabled_defects"] == []
+    assert manifest["defects"] == {}
+    assert out_of_order_change_dates(read_rows(out_dir, "changes.csv")) == []
+
+
 # ----------------------------------------------------------------------
 # CLI
 # ----------------------------------------------------------------------
@@ -511,4 +619,5 @@ def test_cli_smoke(tmp_path: Path) -> None:
         "zero_negative_quantity",
         "uom_mismatch",
         "eco_closed_without_ecn",
+        "change_dates_out_of_order",
     ]

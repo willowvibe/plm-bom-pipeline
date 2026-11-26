@@ -22,6 +22,7 @@ CANONICAL_DEFECTS = [
     "zero_negative_quantity",
     "uom_mismatch",
     "eco_closed_without_ecn",
+    "change_dates_out_of_order",
 ]
 
 DEFECT_DESCRIPTIONS = {
@@ -36,6 +37,9 @@ DEFECT_DESCRIPTIONS = {
     "zero_negative_quantity": "At least one BOM line has a quantity of zero or less.",
     "uom_mismatch": "At least one BOM line uses a unit of measure that differs from the child part base UoM.",
     "eco_closed_without_ecn": "A closed ECO has no ECN child referencing it.",
+    "change_dates_out_of_order": (
+        "A change is approved before initiation or closed before approval."
+    ),
 }
 
 
@@ -356,6 +360,67 @@ def _inject_eco_closed_without_ecn(dataset: Dataset, rng: random.Random) -> dict
     }
 
 
+def _inject_change_dates_out_of_order(
+    dataset: Dataset, rng: random.Random
+) -> dict:
+    """Move one approval date before initiation and one close date before approval."""
+    # Exclude all ECOs (broader than needed, but simpler) to avoid
+    # coordinating with the ECO selected by _inject_eco_closed_without_ecn.
+    approval_candidates = [
+        change
+        for change in dataset.changes
+        if change.change_type != "ECO"
+        and change.initiated_at
+        and change.approved_at
+    ]
+
+    close_candidates = [
+        change
+        for change in dataset.changes
+        if change.change_type != "ECO"
+        and change.approved_at
+        and change.closed_at
+    ]
+
+    approval_change = rng.choice(approval_candidates)
+
+    close_candidates = [
+        change
+        for change in close_candidates
+        if change.change_id != approval_change.change_id
+    ]
+    close_change = rng.choice(close_candidates)
+
+    old_approved_at = approval_change.approved_at
+    new_approved_at = (
+        date.fromisoformat(approval_change.initiated_at)
+        - timedelta(days=3)
+    ).isoformat()
+    approval_change.approved_at = new_approved_at
+
+    old_closed_at = close_change.closed_at
+    new_closed_at = (
+        date.fromisoformat(close_change.approved_at)
+        - timedelta(days=2)
+    ).isoformat()
+    close_change.closed_at = new_closed_at
+
+    return {
+        "approval_before_initiation": {
+            "change_id": approval_change.change_id,
+            "previous_approved_at": old_approved_at,
+            "injected_approved_at": new_approved_at,
+            "initiated_at": approval_change.initiated_at,
+        },
+        "close_before_approval": {
+            "change_id": close_change.change_id,
+            "previous_closed_at": old_closed_at,
+            "injected_closed_at": new_closed_at,
+            "approved_at": close_change.approved_at,
+        },
+    }
+
+
 def inject_defects(
     dataset: Dataset, selection: str | list[str] | None, seed: int
 ) -> dict:
@@ -376,6 +441,7 @@ def inject_defects(
         "zero_negative_quantity": _inject_zero_negative_quantity,
         "uom_mismatch": _inject_uom_mismatch,
         "eco_closed_without_ecn": _inject_eco_closed_without_ecn,
+        "change_dates_out_of_order": _inject_change_dates_out_of_order,
     }
 
     zeroed_line_ids: set[str] = set()

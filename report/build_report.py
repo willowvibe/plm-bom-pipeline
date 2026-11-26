@@ -793,7 +793,7 @@ def render_report(metrics: dict) -> str:
     )
     built_in_checks = metrics["quality"]["total_nodes"] - len(metrics["defects"])
     verify_note = (
-        '<p class="note">The seven singular tests catch the seeded defects. '
+        '<p class="note">The eight singular tests catch the seeded defects. '
         '<span class="mono">make verify-defects</span> proves exactly one '
         f"failure per defect and {_fmt_int(built_in_checks)}/"
         f"{_fmt_int(built_in_checks)} built-in checks on every defect dataset."

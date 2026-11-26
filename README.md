@@ -28,7 +28,7 @@ flowchart LR
     inter --> marts["dbt marts (7 analysis tables)"]
     marts --> db[("DuckDB")]
     marts --> report["Static HTML report"]
-    marts --> tests["174 data tests + 1 unit test"]
+    marts --> tests["175 data tests + 1 unit test"]
     tests --> verify["make verify-defects"]
 ```
 
