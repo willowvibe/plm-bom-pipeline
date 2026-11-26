@@ -40,7 +40,6 @@ DEFECT_DESCRIPTIONS = {
     "change_dates_out_of_order": (
         "A change is approved before initiation or closed before approval."
     ),
-
 }
 
 
@@ -359,11 +358,14 @@ def _inject_eco_closed_without_ecn(dataset: Dataset, rng: random.Random) -> dict
         "injected_status": "closed",
         "has_ecn_child": False,
     }
+
+
 def _inject_change_dates_out_of_order(
     dataset: Dataset, rng: random.Random
 ) -> dict:
-    # Exclude ECOs so we never modify the ECO selected by the
-    # eco_closed_without_ecn defect.
+    """Move one approval date before initiation and one close date before approval."""
+    # Exclude all ECOs (broader than needed, but simpler) to avoid
+    # coordinating with the ECO selected by _inject_eco_closed_without_ecn.
     approval_candidates = [
         change
         for change in dataset.changes
@@ -417,6 +419,7 @@ def _inject_change_dates_out_of_order(
             "approved_at": close_change.approved_at,
         },
     }
+
 
 def inject_defects(
     dataset: Dataset, selection: str | list[str] | None, seed: int

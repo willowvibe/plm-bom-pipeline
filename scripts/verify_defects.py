@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prove one-to-one defect attribution for the dbt data-quality tests.
 
-For clean data, each of the Eight seeded defects on its own, and all seven
+For clean data, each of the eight seeded defects on its own, and all eight
 together, this script runs two passes against the same generated data:
 
 Pass 1 - full ``dbt build``: collect every failed or errored node and check
@@ -50,7 +50,6 @@ DEFECT_TESTS = {
     "uom_mismatch": "assert_no_uom_mismatch",
     "eco_closed_without_ecn": "assert_no_eco_closed_without_ecn",
     "change_dates_out_of_order": "assert_no_change_dates_out_of_order",
-
 }
 
 SINGULAR_TESTS = sorted(DEFECT_TESTS.values())
